@@ -15,6 +15,8 @@ struct MusicPlayer {
     play_video: bool,
     piped_api_domains: Vec<String>,
     piped_api_domain_index: usize,
+    invidious_api_domains: Vec<String>,
+    invidious_api_domain_index: usize,
     played_video_ids: Vec<String>,
     duration_limit: u64,
 }
@@ -27,6 +29,8 @@ impl MusicPlayer {
             play_video: false,
             piped_api_domains: vec!["https://piped-api.garudalinux.org".to_string()],
             piped_api_domain_index: 0,
+            invidious_api_domains: vec!["https://invidious.garudalinux.org".to_string()],
+            invidious_api_domain_index: 0,
             played_video_ids: Vec::new(),
             duration_limit: 600,
         }
@@ -186,9 +190,25 @@ impl MusicPlayer {
             return false;
         } else if stream_json.get("duration").unwrap().as_u64().unwrap() > self.duration_limit {
             return false;
+        } else if !self.get_video_genre(&video_id).contains("Music") {
+            return false;
         }
 
         true
+    }
+
+    fn get_video_genre(&self, video_id: &str) -> String {
+        let request_url = format!(
+            "{}/api/v1/videos/{}",
+            self.invidious_api_domains[self.invidious_api_domain_index], video_id
+        );
+        let response: serde_json::Value = reqwest::blocking::get(&request_url)
+            .unwrap()
+            .json()
+            .unwrap();
+        let genre: String = response.get("genre").unwrap().as_str().unwrap().to_string();
+
+        genre
     }
 
     fn url_into_video_id(&self, url: &str) -> String {
