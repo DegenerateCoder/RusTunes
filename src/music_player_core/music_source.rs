@@ -18,27 +18,30 @@ pub struct Local {}
 
 pub enum Source {
     Remote(Remote),
-    Local(Local),
+    _Local(Local),
     None,
 }
 
 impl Source {
     pub fn new_remote(path: &str) -> Self {
         if path.starts_with("https://") || path.contains("/watch?") {
-            Source::Remote(Remote {
-                url: path.to_string(),
-                video_id: Remote::url_into_video_id(path),
-                audio_stream_url: "".to_string(),
-                title: "".to_string(),
-                length: 0,
-            })
+            Source::Remote(Remote::new(path))
         } else {
-            panic!("Not a valid url");
+            panic!("Not a valid url: {path}");
         }
     }
 }
 
 impl Remote {
+    pub fn new(path: &str) -> Self {
+        Remote {
+            url: path.to_string(),
+            video_id: Remote::url_into_video_id(path),
+            audio_stream_url: "".to_string(),
+            title: "".to_string(),
+            length: 0,
+        }
+    }
     pub fn url_into_video_id(url: &str) -> String {
         let split = url.split("v=");
         let id = split.last().unwrap().to_string();
@@ -85,10 +88,10 @@ impl RemoteSourceProcessor {
         genre
     }
 
-    pub fn get_related_video_url(&self, source: &Remote, played_video_ids: &Vec<String>) -> Source {
+    pub fn get_related_video_url(&self, video_id: &str, played_video_ids: &Vec<String>) -> Source {
         let request_url = format!(
             "{}/streams/{}",
-            self.piped_api_domains[self.piped_api_domain_index], source.video_id
+            self.piped_api_domains[self.piped_api_domain_index], video_id
         );
         let mut response: serde_json::Value = reqwest::blocking::get(&request_url)
             .unwrap()
@@ -103,12 +106,15 @@ impl RemoteSourceProcessor {
         for related_stream in related_streams {
             let related_video_url = related_stream.get("url").unwrap();
             let related_video_url = related_video_url.as_str().unwrap();
+            if related_video_url.contains("/playlist") {
+                continue;
+            }
             if self.check_filters_for_related_video_url(
                 related_video_url,
                 related_stream,
                 played_video_ids,
             ) {
-                println!("Next to play: {related_video_url}");
+                println!("Next to play: {related_video_url} <- from {video_id}");
                 return Source::new_remote(related_video_url);
             }
         }

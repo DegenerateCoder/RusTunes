@@ -1,10 +1,13 @@
 mod music_source;
 
+use std::collections::VecDeque;
+
 pub struct MusicPlayer {
     music_source: music_source::Source,
     playlist_to_play: String,
     play_video: bool,
     played_video_ids: Vec<String>,
+    related_queue: VecDeque<String>,
     remote_src_proc: music_source::RemoteSourceProcessor,
 }
 
@@ -15,6 +18,7 @@ impl MusicPlayer {
             playlist_to_play: "".to_string(),
             play_video: false,
             played_video_ids: Vec::new(),
+            related_queue: VecDeque::new(),
             remote_src_proc: music_source::RemoteSourceProcessor {
                 piped_api_domains: vec!["https://piped-api.garudalinux.org".to_string()],
                 piped_api_domain_index: 0,
@@ -109,8 +113,8 @@ impl MusicPlayer {
                     Ok(libmpv::events::Event::StartFile) => {
                         println!("START");
                     }
-                    Ok(e) => {
-                        println!("Event triggered: {:?}", e);
+                    Ok(_e) => {
+                        //println!("Event triggered: {:?}", e);
                     }
                     Err(e) => println!("Event errored: {:?}", e),
                 }
@@ -123,9 +127,14 @@ impl MusicPlayer {
         let mut next_to_play: music_source::Source;
         match &mut self.music_source {
             music_source::Source::Remote(remote_src) => {
+                self.related_queue.push_back(remote_src.video_id.clone());
+                println!("prepare_next_to_play\n {:?}", self.related_queue);
+                let related_video_id = self.related_queue.pop_front().unwrap();
+                self.related_queue.push_back(related_video_id.clone());
+
                 next_to_play = self
                     .remote_src_proc
-                    .get_related_video_url(remote_src, &self.played_video_ids);
+                    .get_related_video_url(&related_video_id, &self.played_video_ids);
                 match &mut next_to_play {
                     music_source::Source::Remote(next_to_play_src) => {
                         self.played_video_ids
