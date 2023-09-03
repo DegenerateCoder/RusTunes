@@ -9,6 +9,17 @@ pub struct MusicPlayer {
     played_video_ids: Vec<String>,
     related_queue: VecDeque<String>,
     remote_src_proc: music_source::RemoteSourceProcessor,
+    volume: i64,
+}
+
+#[derive(serde::Deserialize)]
+pub struct MusicPlayerConfig {
+    piped_api_domains: Vec<String>,
+    piped_api_domain_index: usize,
+    invidious_api_domains: Vec<String>,
+    invidious_api_domain_index: usize,
+    mpv_base_volume: i64,
+    video_duration_limit_s: u64,
 }
 
 impl MusicPlayer {
@@ -26,8 +37,28 @@ impl MusicPlayer {
                 invidious_api_domain_index: 0,
                 duration_limit: 600,
             },
+            volume: 30,
         }
     }
+
+    pub fn new_from_config(config: MusicPlayerConfig) -> Self {
+        MusicPlayer {
+            music_source: music_source::Source::None,
+            playlist_to_play: "".to_string(),
+            play_video: false,
+            played_video_ids: Vec::new(),
+            related_queue: VecDeque::new(),
+            remote_src_proc: music_source::RemoteSourceProcessor {
+                piped_api_domains: config.piped_api_domains,
+                piped_api_domain_index: config.piped_api_domain_index,
+                invidious_api_domains: config.invidious_api_domains,
+                invidious_api_domain_index: config.invidious_api_domain_index,
+                duration_limit: config.video_duration_limit_s,
+            },
+            volume: config.mpv_base_volume,
+        }
+    }
+
     pub fn play(&mut self, user_input: &str) {
         if user_input.contains("list=") {
             self.playlist_to_play = user_input.to_string();
@@ -40,6 +71,7 @@ impl MusicPlayer {
             self.play_audio();
         }
     }
+
     fn play_audio(&mut self) {
         match &mut self.music_source {
             music_source::Source::Remote(remote_src) => {
@@ -63,7 +95,7 @@ impl MusicPlayer {
 
     fn play_music_mpv(&mut self) {
         let mpv = libmpv::Mpv::new().unwrap();
-        mpv.set_property("volume", 75).unwrap();
+        mpv.set_property("volume", self.volume).unwrap();
         mpv.set_property("vo", "null").unwrap();
 
         let mut ev_ctx = mpv.create_event_context();
@@ -87,9 +119,6 @@ impl MusicPlayer {
                     )])
                     .unwrap();
                     self.prepare_next_to_play();
-
-                    // Trigger `Event::EndFile`.
-                    //mpv.playlist_next_force().unwrap();
                 }
                 _ => panic!(),
             });

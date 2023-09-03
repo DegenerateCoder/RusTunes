@@ -133,7 +133,7 @@ impl RemoteSourceProcessor {
                 let video_id = &remote_src.video_id;
                 if played_video_ids.contains(video_id) {
                     return false;
-                } else if stream_json.get("duration").unwrap().as_u64().unwrap()
+                } else if stream_json.get("duration").unwrap().as_u64().unwrap_or(self.duration_limit+1)// .unwrap()
                     > self.duration_limit
                 {
                     return false;
