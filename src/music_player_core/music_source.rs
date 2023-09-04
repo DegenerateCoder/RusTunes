@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 pub struct RemoteSourceProcessor {
     pub piped_api_domains: Vec<String>,
     pub piped_api_domain_index: usize,
@@ -19,7 +21,6 @@ pub struct Local {}
 pub enum Source {
     Remote(Remote),
     _Local(Local),
-    None,
 }
 
 impl Source {
@@ -42,8 +43,16 @@ impl Remote {
             length: 0,
         }
     }
+
     pub fn url_into_video_id(url: &str) -> String {
         let split = url.split("v=");
+        let id = split.last().unwrap().to_string();
+
+        id
+    }
+
+    pub fn url_into_playlist_id(url: &str) -> String {
+        let split = url.split("list=");
         let id = split.last().unwrap().to_string();
 
         id
@@ -144,5 +153,59 @@ impl RemoteSourceProcessor {
             _ => panic!(),
         }
         true
+    }
+
+    pub fn playlist_to_remote_vec(&self, playlist_id: &str) -> VecDeque<Source> {
+        let mut playlist = VecDeque::new();
+        let request_url = format!(
+            "{}/playlists/{}",
+            self.piped_api_domains[self.piped_api_domain_index], playlist_id
+        );
+
+        let mut response: serde_json::Value = reqwest::blocking::get(&request_url)
+            .unwrap()
+            .json()
+            .unwrap();
+
+        loop {
+            let related_streams: &mut Vec<serde_json::Value> = response
+                .get_mut("relatedStreams")
+                .unwrap()
+                .as_array_mut()
+                .unwrap();
+
+            for stream in related_streams {
+                let url = stream.get("url").unwrap().as_str().unwrap().to_string();
+                let video_id = Remote::url_into_video_id(&url);
+
+                playlist.push_back(Source::Remote(Remote {
+                    url,
+                    video_id,
+                    audio_stream_url: "".to_string(),
+                    title: "".to_string(),
+                    length: 0,
+                }));
+            }
+
+            let nextpage = response.get("nextpage").unwrap();
+            if nextpage.is_null() {
+                break;
+            }
+
+            let nextpage = nextpage.as_str().unwrap().to_owned();
+            let request_url = format!(
+                "{}/nextpage/playlists/{}?nextpage={}",
+                self.piped_api_domains[self.piped_api_domain_index],
+                playlist_id,
+                urlencoding::encode(&nextpage)
+            );
+
+            response = reqwest::blocking::get(&request_url)
+                .unwrap()
+                .json()
+                .unwrap();
+        }
+
+        playlist
     }
 }

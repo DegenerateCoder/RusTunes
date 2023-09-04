@@ -3,7 +3,7 @@ mod music_source;
 use std::collections::VecDeque;
 
 pub struct MusicPlayer {
-    music_source: music_source::Source,
+    next_to_play: VecDeque<music_source::Source>,
     playlist_to_play: String,
     play_video: bool,
     played_video_ids: Vec<String>,
@@ -25,7 +25,7 @@ pub struct MusicPlayerConfig {
 impl MusicPlayer {
     pub fn new() -> Self {
         MusicPlayer {
-            music_source: music_source::Source::None,
+            next_to_play: VecDeque::new(),
             playlist_to_play: "".to_string(),
             play_video: false,
             played_video_ids: Vec::new(),
@@ -43,7 +43,7 @@ impl MusicPlayer {
 
     pub fn new_from_config(config: MusicPlayerConfig) -> Self {
         MusicPlayer {
-            music_source: music_source::Source::None,
+            next_to_play: VecDeque::new(),
             playlist_to_play: "".to_string(),
             play_video: false,
             played_video_ids: Vec::new(),
@@ -61,19 +61,21 @@ impl MusicPlayer {
 
     pub fn play(&mut self, user_input: &str) {
         if user_input.contains("list=") {
-            self.playlist_to_play = user_input.to_string();
-            self.play_playlist()
+            self.playlist_to_play = music_source::Remote::url_into_playlist_id(user_input);
+            self.play_playlist();
         } else if self.play_video {
-            self.music_source = music_source::Source::new_remote(user_input);
+            //self.music_source = music_source::Source::new_remote(user_input);
             self.play_audio_and_video()
         } else {
-            self.music_source = music_source::Source::new_remote(user_input);
+            let music_source = music_source::Source::new_remote(user_input);
+            self.next_to_play.push_back(music_source);
             self.play_audio();
         }
     }
 
     fn play_audio(&mut self) {
-        match &mut self.music_source {
+        let mut music_source = self.next_to_play.get_mut(0).unwrap();
+        match &mut music_source {
             music_source::Source::Remote(remote_src) => {
                 self.played_video_ids.push(remote_src.video_id.clone());
                 self.remote_src_proc.set_audio_url_title(remote_src);
@@ -85,8 +87,12 @@ impl MusicPlayer {
         }
     }
 
-    fn play_playlist(&self) {
-        unimplemented!("playlist playback");
+    fn play_playlist(&mut self) {
+        self.next_to_play = self
+            .remote_src_proc
+            .playlist_to_remote_vec(&self.playlist_to_play);
+
+        self.play_audio();
     }
 
     fn play_audio_and_video(&self) {
@@ -109,18 +115,25 @@ impl MusicPlayer {
             .unwrap();
         */
         crossbeam::scope(|scope| {
-            scope.spawn(|_| match &mut self.music_source {
-                music_source::Source::Remote(remote_src) => {
-                    println!("Playing: {} at {}", remote_src.title, remote_src.video_id);
-                    mpv.playlist_load_files(&[(
-                        &remote_src.audio_stream_url,
-                        libmpv::FileState::AppendPlay,
-                        None,
-                    )])
-                    .unwrap();
-                    self.prepare_next_to_play();
+            scope.spawn(|_| {
+                let mut music_source = self.next_to_play.pop_front().unwrap();
+                match &mut music_source {
+                    music_source::Source::Remote(remote_src) => {
+                        if remote_src.audio_stream_url.is_empty() {
+                            self.remote_src_proc.set_audio_url_title(remote_src);
+                        }
+                        println!("Playing: {} at {}", remote_src.title, remote_src.video_id);
+                        mpv.playlist_load_files(&[(
+                            &remote_src.audio_stream_url,
+                            libmpv::FileState::AppendPlay,
+                            None,
+                        )])
+                        .unwrap();
+                    }
+                    _ => panic!(),
                 }
-                _ => panic!(),
+
+                self.prepare_next_to_play(music_source);
             });
             scope.spawn(move |_| loop {
                 let ev = ev_ctx.wait_event(600.).unwrap_or(Err(libmpv::Error::Null));
@@ -152,18 +165,24 @@ impl MusicPlayer {
         .unwrap();
     }
 
-    fn prepare_next_to_play(&mut self) {
+    fn prepare_next_to_play(&mut self, prev_music_source: music_source::Source) {
+        let music_source = prev_music_source;
         let mut next_to_play: music_source::Source;
-        match &mut self.music_source {
+        match music_source {
             music_source::Source::Remote(remote_src) => {
                 self.related_queue.push_back(remote_src.video_id.clone());
                 println!("prepare_next_to_play\n {:?}", self.related_queue);
-                let related_video_id = self.related_queue.pop_front().unwrap();
-                self.related_queue.push_back(related_video_id.clone());
+                if self.next_to_play.is_empty() {
+                    let related_video_id = self.related_queue.pop_front().unwrap();
+                    self.related_queue.push_back(related_video_id.clone());
 
-                next_to_play = self
-                    .remote_src_proc
-                    .get_related_video_url(&related_video_id, &self.played_video_ids);
+                    next_to_play = self
+                        .remote_src_proc
+                        .get_related_video_url(&related_video_id, &self.played_video_ids);
+                } else {
+                    // TODO: rewrite this, highly inefficient
+                    next_to_play = self.next_to_play.pop_front().unwrap();
+                }
                 match &mut next_to_play {
                     music_source::Source::Remote(next_to_play_src) => {
                         self.played_video_ids
@@ -175,7 +194,7 @@ impl MusicPlayer {
             }
             _ => panic!(),
         }
-        self.music_source = next_to_play;
+        self.next_to_play.push_front(next_to_play);
     }
 }
 
