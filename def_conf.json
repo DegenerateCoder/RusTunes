@@ -8,5 +8,6 @@
   ],
   "invidious_api_domain_index": 0,
   "mpv_base_volume": 100,
-  "video_duration_limit_s": 600
+  "video_duration_limit_s": 600,
+  "shuffle_playlist": true
 }

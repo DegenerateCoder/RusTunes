@@ -1,10 +1,13 @@
 mod music_source;
 
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use std::collections::VecDeque;
 
 pub struct MusicPlayer {
     next_to_play: VecDeque<music_source::Source>,
     playlist_to_play: String,
+    shuffle_playlist: bool,
     play_video: bool,
     played_video_ids: Vec<String>,
     related_queue: VecDeque<String>,
@@ -16,6 +19,7 @@ pub struct MusicPlayer {
 pub struct MusicPlayerConfig {
     piped_api_domains: Vec<String>,
     piped_api_domain_index: usize,
+    shuffle_playlist: bool,
     invidious_api_domains: Vec<String>,
     invidious_api_domain_index: usize,
     mpv_base_volume: i64,
@@ -27,6 +31,7 @@ impl MusicPlayer {
         MusicPlayer {
             next_to_play: VecDeque::new(),
             playlist_to_play: "".to_string(),
+            shuffle_playlist: false,
             play_video: false,
             played_video_ids: Vec::new(),
             related_queue: VecDeque::new(),
@@ -45,6 +50,7 @@ impl MusicPlayer {
         MusicPlayer {
             next_to_play: VecDeque::new(),
             playlist_to_play: "".to_string(),
+            shuffle_playlist: config.shuffle_playlist,
             play_video: false,
             played_video_ids: Vec::new(),
             related_queue: VecDeque::new(),
@@ -91,6 +97,12 @@ impl MusicPlayer {
         self.next_to_play = self
             .remote_src_proc
             .playlist_to_remote_vec(&self.playlist_to_play);
+
+        if self.shuffle_playlist {
+            self.next_to_play
+                .make_contiguous()
+                .shuffle(&mut thread_rng());
+        }
 
         self.play_audio();
     }
