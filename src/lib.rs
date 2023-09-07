@@ -1,1 +1,1 @@
-pub mod music_player_core;
+pub mod music_player;

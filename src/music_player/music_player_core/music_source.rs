@@ -8,6 +8,7 @@ pub struct RemoteSourceProcessor {
     pub duration_limit: u64,
 }
 
+#[derive(Clone)]
 pub struct Remote {
     pub url: String,
     pub video_id: String,
@@ -16,8 +17,10 @@ pub struct Remote {
     pub length: u64,
 }
 
+#[derive(Clone)]
 pub struct Local {}
 
+#[derive(Clone)]
 pub enum Source {
     Remote(Remote),
     _Local(Local),
@@ -81,6 +84,8 @@ impl RemoteSourceProcessor {
         source.audio_stream_url = source.audio_stream_url.replace("\"", "");
         let music_title = response.get("title").unwrap();
         source.title = music_title.to_string();
+        let duration = response.get("duration").unwrap();
+        source.length = duration.as_u64().unwrap();
     }
 
     pub fn get_video_genre(&self, source: &Remote) -> String {
@@ -123,7 +128,7 @@ impl RemoteSourceProcessor {
                 related_stream,
                 played_video_ids,
             ) {
-                println!("Next to play: {related_video_url} <- from {video_id}");
+                //println!("Next to play: {related_video_url} <- from {video_id}");
                 return Source::new_remote(related_video_url);
             }
         }
