@@ -3,6 +3,7 @@ use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 pub enum LibMpvSignals {
     PlayAudio(String),
     SetVolume(i64),
+    End,
 }
 
 pub struct LibMpvHandler {
@@ -56,6 +57,10 @@ impl LibMpvHandler {
                         LibMpvSignals::SetVolume(vol) => {
                             self.mpv.set_property("volume", vol).unwrap();
                         }
+                        LibMpvSignals::End => {
+                            self.mpv.command("quit", &["0"]).unwrap();
+                            break;
+                        }
                     }
                 }
             }
@@ -90,6 +95,12 @@ pub fn libmpv_event_handling(
             Ok(libmpv::events::Event::StartFile) => {
                 //s_t.send(Signal::Start).unwrap();
                 //println!("START");
+            }
+            Ok(libmpv::events::Event::Shutdown) => {
+                mp_logic_signal_send
+                    .send(MusicPlayerLogicSignals::End)
+                    .unwrap();
+                break;
             }
             Ok(_e) => {
                 //println!("Event triggered: {:?}", e);

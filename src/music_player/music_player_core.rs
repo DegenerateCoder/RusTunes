@@ -1,13 +1,14 @@
 mod music_source;
 
 use crate::music_player::libmpv_handlers::LibMpvSignals;
-use crate::music_player::TuiSignals;
+use crate::music_player::music_player_tui::TuiSignals;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::VecDeque;
 
 pub enum MusicPlayerLogicSignals {
     PlaybackEnded,
+    End,
 }
 
 pub struct MusicPlayerLogic {
@@ -58,7 +59,7 @@ impl MusicPlayerLogic {
         s
     }
 
-    pub fn handle_user_input(&mut self, user_input: &str) {
+    pub fn process_user_input(&mut self, user_input: &str) {
         if user_input.contains("list=") {
             self.playlist_to_play = music_source::Remote::url_into_playlist_id(user_input);
             self.prepare_playlist();
@@ -95,6 +96,9 @@ impl MusicPlayerLogic {
                             self.prepare_audio(libmpv_signal_send, tui_signal_send);
                             self.prepare_next_to_play();
                         }
+                        MusicPlayerLogicSignals::End => {
+                            break;
+                        }
                     }
                 }
             }
@@ -112,7 +116,13 @@ impl MusicPlayerLogic {
                 self.played_video_ids.push(remote_src.video_id.clone());
                 self.remote_src_proc.set_audio_url_title(remote_src);
                 tui_signal_send
-                    .send(TuiSignals::UpdateTitle(remote_src.title.to_string()))
+                    .send(TuiSignals::UpdateTitle(format!(
+                        "{}\n{}/{}",
+                        remote_src.title.to_string(),
+                        self.remote_src_proc.piped_api_domains
+                            [self.remote_src_proc.piped_api_domain_index],
+                        remote_src.video_id
+                    )))
                     .unwrap();
                 libmpv_signal_send
                     .send(LibMpvSignals::PlayAudio(

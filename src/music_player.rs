@@ -1,17 +1,14 @@
 pub mod libmpv_handlers;
 mod music_player_core;
-
-pub enum TuiSignals {
-    UpdateTitle(String),
-}
+mod music_player_tui;
 
 pub struct MusicPlayer {
     libmpv: libmpv_handlers::LibMpvHandler,
     libmpv_signal_send: crossbeam::channel::Sender<libmpv_handlers::LibMpvSignals>,
     music_player_logic: music_player_core::MusicPlayerLogic,
     mp_logic_signal_send: crossbeam::channel::Sender<music_player_core::MusicPlayerLogicSignals>,
-    tui_signal_send: crossbeam::channel::Sender<TuiSignals>,
-    tui_signal_recv: crossbeam::channel::Receiver<TuiSignals>,
+    music_player_tui: music_player_tui::MusicPlayerTUI,
+    tui_signal_send: crossbeam::channel::Sender<music_player_tui::TuiSignals>,
 }
 
 impl MusicPlayer {
@@ -26,17 +23,20 @@ impl MusicPlayer {
             libmpv_handlers::LibMpvHandler::initialize_libmpv(config.mpv_base_volume).unwrap();
         let libmpv_signal_send = libmpv.create_signal_channel();
 
+        let mut music_player_tui =
+            music_player_tui::MusicPlayerTUI::setup_terminal(config.mpv_base_volume);
+        let tui_signal_send = music_player_tui.create_signal_channel();
+
         let mut music_player_logic = music_player_core::MusicPlayerLogic::new(config);
         let mp_logic_signal_send = music_player_logic.create_signal_channel();
 
-        let (tui_signal_send, tui_signal_recv) = crossbeam::channel::unbounded();
         MusicPlayer {
             libmpv,
             libmpv_signal_send,
             music_player_logic,
             mp_logic_signal_send,
+            music_player_tui,
             tui_signal_send,
-            tui_signal_recv,
         }
     }
 
@@ -44,30 +44,25 @@ impl MusicPlayer {
         let ev_ctx = self.libmpv.create_event_context();
         let ev_ctx = ev_ctx.unwrap();
         crossbeam::scope(|scope| {
+            scope.spawn(|_| self.libmpv.handle_signals());
+            scope.spawn(|_| self.music_player_tui.handle_signals());
             scope.spawn(|_| {
                 libmpv_handlers::libmpv_event_handling(ev_ctx, &self.mp_logic_signal_send)
             });
-            scope.spawn(|_| self.libmpv.handle_signals());
             scope.spawn(|_| {
-                self.music_player_logic.handle_user_input(user_input);
+                self.music_player_logic.process_user_input(user_input);
                 self.music_player_logic
                     .handle_playback_logic(&self.libmpv_signal_send, &self.tui_signal_send);
             });
-            scope.spawn(|_| self.libmpv.handle_signals());
             scope.spawn(|_| {
-                // TUI
-                loop {
-                    let recv = &self.tui_signal_recv;
-                    if let Ok(signal) = recv.try_recv() {
-                        match signal {
-                            TuiSignals::UpdateTitle(title) => {
-                                println!("{title}");
-                            }
-                        }
-                    }
-                }
+                music_player_tui::handle_user_input(
+                    &self.libmpv_signal_send,
+                    &self.tui_signal_send,
+                );
             });
         })
         .unwrap();
+
+        self.music_player_tui.restore_terminal();
     }
 }
