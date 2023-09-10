@@ -124,6 +124,9 @@ impl MusicPlayerLogic {
                         remote_src.video_id
                     )))
                     .unwrap();
+                tui_signal_send
+                    .send(TuiSignals::UpdateDuration(remote_src.length))
+                    .unwrap();
                 libmpv_signal_send
                     .send(LibMpvSignals::PlayAudio(
                         remote_src.audio_stream_url.to_string(),

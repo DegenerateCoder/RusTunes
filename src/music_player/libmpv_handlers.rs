@@ -1,4 +1,5 @@
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
+use crate::music_player::music_player_tui::TuiSignals;
 
 pub enum LibMpvSignals {
     PlayAudio(String),
@@ -60,6 +61,10 @@ impl LibMpvHandler {
                             self.mpv.set_property("pause", true).unwrap();
                         }
                         LibMpvSignals::Resume => {
+                            /*
+                            let current_pos = self.mpv.get_property::<f64>("time-pos").unwrap();
+                            println!("{current_pos}");
+                            */
                             self.mpv.set_property("pause", false).unwrap();
                         }
                         LibMpvSignals::SetVolume(vol) => {
@@ -79,7 +84,8 @@ impl LibMpvHandler {
 pub fn libmpv_event_handling(
     mut ev_ctx: libmpv::events::EventContext,
     mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
-    ) {
+    tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
+) {
     loop {
         let ev = ev_ctx.wait_event(600.).unwrap_or(Err(libmpv::Error::Null));
 
@@ -101,8 +107,7 @@ pub fn libmpv_event_handling(
                 //println!("Seekable ranges updated: {:?}", ranges);
             }
             Ok(libmpv::events::Event::StartFile) => {
-                //s_t.send(Signal::Start).unwrap();
-                //println!("START");
+                tui_signal_send.send(TuiSignals::PlaybackStart).unwrap();
             }
             Ok(libmpv::events::Event::Shutdown) => {
                 mp_logic_signal_send

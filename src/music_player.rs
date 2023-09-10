@@ -51,7 +51,11 @@ impl MusicPlayer {
             scope.spawn(|_| self.libmpv.handle_signals());
             scope.spawn(|_| self.music_player_tui.handle_signals());
             scope.spawn(|_| {
-                libmpv_handlers::libmpv_event_handling(ev_ctx, &self.mp_logic_signal_send)
+                libmpv_handlers::libmpv_event_handling(
+                    ev_ctx,
+                    &self.mp_logic_signal_send,
+                    &self.tui_signal_send,
+                )
             });
             scope.spawn(|_| {
                 self.music_player_logic.process_user_input(user_input);
