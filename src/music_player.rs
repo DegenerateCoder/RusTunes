@@ -9,6 +9,7 @@ pub struct MusicPlayer {
     mp_logic_signal_send: crossbeam::channel::Sender<music_player_core::MusicPlayerLogicSignals>,
     music_player_tui: music_player_tui::MusicPlayerTUI,
     tui_signal_send: crossbeam::channel::Sender<music_player_tui::TuiSignals>,
+    tui_input_handler: music_player_tui::TUIUserInputHandler,
 }
 
 impl MusicPlayer {
@@ -27,6 +28,8 @@ impl MusicPlayer {
             music_player_tui::MusicPlayerTUI::setup_terminal(config.mpv_base_volume);
         let tui_signal_send = music_player_tui.create_signal_channel();
 
+        let tui_input_handler = music_player_tui::TUIUserInputHandler::new(config.mpv_base_volume);
+
         let mut music_player_logic = music_player_core::MusicPlayerLogic::new(config);
         let mp_logic_signal_send = music_player_logic.create_signal_channel();
 
@@ -37,6 +40,7 @@ impl MusicPlayer {
             mp_logic_signal_send,
             music_player_tui,
             tui_signal_send,
+            tui_input_handler,
         }
     }
 
@@ -55,10 +59,8 @@ impl MusicPlayer {
                     .handle_playback_logic(&self.libmpv_signal_send, &self.tui_signal_send);
             });
             scope.spawn(|_| {
-                music_player_tui::handle_user_input(
-                    &self.libmpv_signal_send,
-                    &self.tui_signal_send,
-                );
+                self.tui_input_handler
+                    .handle_user_input(&self.libmpv_signal_send, &self.tui_signal_send);
             });
         })
         .unwrap();

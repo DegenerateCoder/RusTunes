@@ -12,8 +12,11 @@ use ratatui::{
 };
 
 pub enum TuiSignals {
+    PlaybackPause,
+    PlaybackResume,
     UpdateTitle(String),
     UpdateState(TuiState),
+    UpdateVolume(i64),
     End,
 }
 
@@ -81,16 +84,27 @@ impl MusicPlayerTUI {
     pub fn handle_signals(&mut self) {
         let mut title = "".to_string();
         let mut history = Vec::new();
+        let mut playback_paused = false;
+
         loop {
             if let Some(recv) = &self.tui_signal_recv {
                 if let Ok(signal) = recv.try_recv() {
                     match signal {
+                        TuiSignals::PlaybackPause => {
+                            playback_paused = true;
+                        }
+                        TuiSignals::PlaybackResume => {
+                            playback_paused = false;
+                        }
                         TuiSignals::UpdateTitle(t) => {
                             title = t.clone();
                             history.push(format!("{}: {}", history.len(), t.replace('\n', " ")));
                         }
                         TuiSignals::UpdateState(state) => {
                             self.tui_state = state;
+                        }
+                        TuiSignals::UpdateVolume(volume) => {
+                            self.volume = volume;
                         }
                         TuiSignals::End => {
                             break;
@@ -100,8 +114,15 @@ impl MusicPlayerTUI {
             }
             match self.tui_state {
                 TuiState::Player => {
+                    let symbol = {
+                        if playback_paused {
+                            "|"
+                        } else {
+                            ">"
+                        }
+                    };
                     let mut to_draw = title.clone();
-                    to_draw.push_str(&format!("\nVol: {}", self.volume));
+                    to_draw.push_str(&format!("\n{} vol: {}", symbol, self.volume));
                     self.draw(&to_draw);
                 }
                 TuiState::History => {
@@ -114,48 +135,128 @@ impl MusicPlayerTUI {
     }
 }
 
-pub fn handle_user_input(
-    libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
-    tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
-) {
-    loop {
-        let event = event::read();
-        if let Ok(event) = event {
-            match event {
-                event::Event::Key(key) => {
-                    if handle_key_event(key, libmpv_signal_send, tui_signal_send) {
-                        break;
+pub struct TUIUserInputHandler {
+    volume: i64,
+    pause: bool,
+}
+
+impl TUIUserInputHandler {
+    pub fn new(volume: i64) -> Self {
+        TUIUserInputHandler {
+            volume,
+            pause: false,
+        }
+    }
+
+    pub fn handle_user_input(
+        &mut self,
+        libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
+        tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
+    ) {
+        loop {
+            let event = event::read();
+            if let Ok(event) = event {
+                match event {
+                    event::Event::Key(key) => {
+                        if self.handle_key_event(key, libmpv_signal_send, tui_signal_send) {
+                            break;
+                        }
                     }
+                    _ => (),
                 }
-                _ => (),
             }
         }
     }
-}
 
-fn handle_key_event(
-    key: crossterm::event::KeyEvent,
-    libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
-    tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
-) -> bool {
-    match key.code {
-        crossterm::event::KeyCode::Char('q') => {
-            libmpv_signal_send.send(LibMpvSignals::End).unwrap();
-            tui_signal_send.send(TuiSignals::End).unwrap();
-            return true;
+    fn handle_key_event(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+        libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
+        tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
+    ) -> bool {
+        match key.code {
+            crossterm::event::KeyCode::Char('q') => {
+                libmpv_signal_send.send(LibMpvSignals::End).unwrap();
+                tui_signal_send.send(TuiSignals::End).unwrap();
+                return true;
+            }
+            crossterm::event::KeyCode::Char('1') => {
+                tui_signal_send
+                    .send(TuiSignals::UpdateState(TuiState::Player))
+                    .unwrap();
+            }
+            crossterm::event::KeyCode::Char('2') => {
+                tui_signal_send
+                    .send(TuiSignals::UpdateState(TuiState::History))
+                    .unwrap();
+            }
+            crossterm::event::KeyCode::Char(' ') => {
+                self.pause = !self.pause;
+                if self.pause {
+                    libmpv_signal_send.send(LibMpvSignals::Pause).unwrap();
+                    tui_signal_send.send(TuiSignals::PlaybackPause).unwrap();
+                } else {
+                    libmpv_signal_send.send(LibMpvSignals::Resume).unwrap();
+                    tui_signal_send.send(TuiSignals::PlaybackResume).unwrap();
+                }
+            }
+            crossterm::event::KeyCode::Char(']') => {
+                self.update_volume(10);
+
+                tui_signal_send
+                    .send(TuiSignals::UpdateVolume(self.volume))
+                    .unwrap();
+
+                libmpv_signal_send
+                    .send(LibMpvSignals::SetVolume(self.volume))
+                    .unwrap();
+            }
+            crossterm::event::KeyCode::Char('[') => {
+                self.update_volume(-10);
+
+                tui_signal_send
+                    .send(TuiSignals::UpdateVolume(self.volume))
+                    .unwrap();
+
+                libmpv_signal_send
+                    .send(LibMpvSignals::SetVolume(self.volume))
+                    .unwrap();
+            }
+            crossterm::event::KeyCode::Char('}') => {
+                self.update_volume(1);
+
+                tui_signal_send
+                    .send(TuiSignals::UpdateVolume(self.volume))
+                    .unwrap();
+
+                libmpv_signal_send
+                    .send(LibMpvSignals::SetVolume(self.volume))
+                    .unwrap();
+            }
+            crossterm::event::KeyCode::Char('{') => {
+                self.update_volume(-1);
+
+                tui_signal_send
+                    .send(TuiSignals::UpdateVolume(self.volume))
+                    .unwrap();
+
+                libmpv_signal_send
+                    .send(LibMpvSignals::SetVolume(self.volume))
+                    .unwrap();
+            }
+
+            _ => (),
         }
-        crossterm::event::KeyCode::Char('1') => {
-            tui_signal_send
-                .send(TuiSignals::UpdateState(TuiState::Player))
-                .unwrap();
-        }
-        crossterm::event::KeyCode::Char('2') => {
-            tui_signal_send
-                .send(TuiSignals::UpdateState(TuiState::History))
-                .unwrap();
-        }
-        _ => (),
+
+        false
     }
 
-    false
+    fn update_volume(&mut self, change: i64) {
+        self.volume += change;
+        if self.volume > 100 {
+            self.volume = 100;
+        } else if self.volume < 0 {
+            self.volume = 0;
+        }
+    }
 }

@@ -2,6 +2,8 @@ use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 
 pub enum LibMpvSignals {
     PlayAudio(String),
+    Pause,
+    Resume,
     SetVolume(i64),
     End,
 }
@@ -54,6 +56,12 @@ impl LibMpvHandler {
                                 )])
                                 .unwrap();
                         }
+                        LibMpvSignals::Pause => {
+                            self.mpv.set_property("pause", true).unwrap();
+                        }
+                        LibMpvSignals::Resume => {
+                            self.mpv.set_property("pause", false).unwrap();
+                        }
                         LibMpvSignals::SetVolume(vol) => {
                             self.mpv.set_property("volume", vol).unwrap();
                         }
@@ -71,7 +79,7 @@ impl LibMpvHandler {
 pub fn libmpv_event_handling(
     mut ev_ctx: libmpv::events::EventContext,
     mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
-) {
+    ) {
     loop {
         let ev = ev_ctx.wait_event(600.).unwrap_or(Err(libmpv::Error::Null));
 
