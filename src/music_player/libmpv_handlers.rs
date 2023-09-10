@@ -45,7 +45,7 @@ impl LibMpvHandler {
     pub fn handle_signals(&self) {
         loop {
             if let Some(recv) = &self.libmpv_signal_recv {
-                if let Ok(signal) = recv.try_recv() {
+                if let Ok(signal) = recv.recv() {
                     match signal {
                         LibMpvSignals::PlayAudio(source) => {
                             self.mpv

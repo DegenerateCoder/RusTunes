@@ -90,7 +90,7 @@ impl MusicPlayerLogic {
         self.prepare_next_to_play();
         loop {
             if let Some(recv) = &self.mp_logic_signal_recv {
-                if let Ok(signal) = recv.try_recv() {
+                if let Ok(signal) = recv.recv() {
                     match signal {
                         MusicPlayerLogicSignals::PlaybackEnded => {
                             self.prepare_audio(libmpv_signal_send, tui_signal_send);

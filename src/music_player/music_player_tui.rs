@@ -87,6 +87,7 @@ impl MusicPlayerTUI {
         let mut playback_paused = false;
 
         loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
             if let Some(recv) = &self.tui_signal_recv {
                 if let Ok(signal) = recv.try_recv() {
                     match signal {
