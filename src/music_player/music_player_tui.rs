@@ -1,4 +1,5 @@
 use crate::music_player::libmpv_handlers::LibMpvSignals;
+use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture},
@@ -85,7 +86,7 @@ impl MusicPlayerTUI {
 
     pub fn handle_signals(&mut self) {
         let mut title = "".to_string();
-        let mut history = Vec::new();
+        let mut history: Vec<String> = Vec::new();
         let mut duration = 0;
         let mut playback_start = std::time::SystemTime::now();
         let mut playback_start_offset = 0.0;
@@ -111,7 +112,14 @@ impl MusicPlayerTUI {
                         }
                         TuiSignals::UpdateTitle(t) => {
                             title = t.clone();
-                            history.push(format!("{}: {}", history.len(), t.replace('\n', " ")));
+                            let t = t.replace('\n', " ");
+                            let mut contains = false;
+                            history.iter().for_each(|entry| {
+                                contains = contains || entry.contains(&t);
+                            });
+                            if !contains {
+                                history.push(format!("{}: {}", history.len(), t));
+                            }
                         }
                         TuiSignals::UpdateState(state) => {
                             self.tui_state = state;
@@ -155,7 +163,9 @@ impl MusicPlayerTUI {
                 }
                 TuiState::History => {
                     let mut to_draw = "".to_string();
-                    history.iter().for_each(|x| to_draw.push_str(x));
+                    history
+                        .iter()
+                        .for_each(|x| to_draw.push_str(&format!("{x}\n")));
                     self.draw(&to_draw);
                 }
             }
@@ -180,13 +190,19 @@ impl TUIUserInputHandler {
         &mut self,
         libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
         tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
+        mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
     ) {
         loop {
             let event = event::read();
             if let Ok(event) = event {
                 match event {
                     event::Event::Key(key) => {
-                        if self.handle_key_event(key, libmpv_signal_send, tui_signal_send) {
+                        if self.handle_key_event(
+                            key,
+                            libmpv_signal_send,
+                            tui_signal_send,
+                            mp_logic_signal_send,
+                        ) {
                             break;
                         }
                     }
@@ -201,6 +217,7 @@ impl TUIUserInputHandler {
         key: crossterm::event::KeyEvent,
         libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
         tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
+        mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
     ) -> bool {
         match key.code {
             crossterm::event::KeyCode::Char('q') => {
@@ -271,6 +288,15 @@ impl TUIUserInputHandler {
                 libmpv_signal_send
                     .send(LibMpvSignals::SetVolume(self.volume))
                     .unwrap();
+            }
+            crossterm::event::KeyCode::Char('b') => {
+                libmpv_signal_send.send(LibMpvSignals::PlayNext).unwrap();
+            }
+            crossterm::event::KeyCode::Char('z') => {
+                mp_logic_signal_send
+                    .send(MusicPlayerLogicSignals::PlayPrev)
+                    .unwrap();
+                libmpv_signal_send.send(LibMpvSignals::PlayPrev).unwrap();
             }
 
             _ => (),

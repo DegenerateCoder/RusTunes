@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 pub struct RemoteSourceProcessor {
     pub piped_api_domains: Vec<String>,
     pub piped_api_domain_index: usize,
@@ -160,8 +158,8 @@ impl RemoteSourceProcessor {
         true
     }
 
-    pub fn playlist_to_remote_vec(&self, playlist_id: &str) -> VecDeque<Source> {
-        let mut playlist = VecDeque::new();
+    pub fn playlist_to_remote_vec(&self, playlist_id: &str) -> Vec<Source> {
+        let mut playlist = Vec::new();
         let request_url = format!(
             "{}/playlists/{}",
             self.piped_api_domains[self.piped_api_domain_index], playlist_id
@@ -183,7 +181,7 @@ impl RemoteSourceProcessor {
                 let url = stream.get("url").unwrap().as_str().unwrap().to_string();
                 let video_id = Remote::url_into_video_id(&url);
 
-                playlist.push_back(Source::Remote(Remote {
+                playlist.push(Source::Remote(Remote {
                     url,
                     video_id,
                     audio_stream_url: "".to_string(),

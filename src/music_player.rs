@@ -63,8 +63,11 @@ impl MusicPlayer {
                     .handle_playback_logic(&self.libmpv_signal_send, &self.tui_signal_send);
             });
             scope.spawn(|_| {
-                self.tui_input_handler
-                    .handle_user_input(&self.libmpv_signal_send, &self.tui_signal_send);
+                self.tui_input_handler.handle_user_input(
+                    &self.libmpv_signal_send,
+                    &self.tui_signal_send,
+                    &self.mp_logic_signal_send,
+                );
             });
         })
         .unwrap();

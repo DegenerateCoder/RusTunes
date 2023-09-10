@@ -3,6 +3,8 @@ use crate::music_player::music_player_tui::TuiSignals;
 
 pub enum LibMpvSignals {
     PlayAudio(String),
+    PlayNext,
+    PlayPrev,
     Pause,
     Resume,
     SetVolume(i64),
@@ -66,6 +68,12 @@ impl LibMpvHandler {
                             println!("{current_pos}");
                             */
                             self.mpv.set_property("pause", false).unwrap();
+                        }
+                        LibMpvSignals::PlayNext => {
+                            self.mpv.playlist_next_force().unwrap();
+                        }
+                        LibMpvSignals::PlayPrev => {
+                            let _ = self.mpv.playlist_previous_weak();
                         }
                         LibMpvSignals::SetVolume(vol) => {
                             self.mpv.set_property("volume", vol).unwrap();

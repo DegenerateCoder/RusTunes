@@ -8,11 +8,13 @@ use std::collections::VecDeque;
 
 pub enum MusicPlayerLogicSignals {
     PlaybackEnded,
+    PlayPrev,
     End,
 }
 
 pub struct MusicPlayerLogic {
-    next_to_play: VecDeque<music_source::Source>,
+    to_play: Vec<music_source::Source>,
+    to_play_index: usize,
     playlist_to_play: String,
     shuffle_playlist: bool,
     played_video_ids: Vec<String>,
@@ -35,7 +37,8 @@ pub struct MusicPlayerConfig {
 impl MusicPlayerLogic {
     pub fn new(config: MusicPlayerConfig) -> Self {
         MusicPlayerLogic {
-            next_to_play: VecDeque::new(),
+            to_play: Vec::new(),
+            to_play_index: 0,
             playlist_to_play: "".to_string(),
             shuffle_playlist: config.shuffle_playlist,
             played_video_ids: Vec::new(),
@@ -65,19 +68,17 @@ impl MusicPlayerLogic {
             self.prepare_playlist();
         } else {
             let music_source = music_source::Source::new_remote(user_input);
-            self.next_to_play.push_back(music_source);
+            self.to_play.push(music_source);
         }
     }
 
     fn prepare_playlist(&mut self) {
-        self.next_to_play = self
+        self.to_play = self
             .remote_src_proc
             .playlist_to_remote_vec(&self.playlist_to_play);
 
         if self.shuffle_playlist {
-            self.next_to_play
-                .make_contiguous()
-                .shuffle(&mut thread_rng());
+            self.to_play.shuffle(&mut thread_rng());
         }
     }
 
@@ -99,6 +100,11 @@ impl MusicPlayerLogic {
                         MusicPlayerLogicSignals::End => {
                             break;
                         }
+                        MusicPlayerLogicSignals::PlayPrev => {
+                            if self.to_play_index > 1 {
+                                self.to_play_index -= 2;
+                            }
+                        }
                     }
                 }
             }
@@ -110,11 +116,16 @@ impl MusicPlayerLogic {
         libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
         tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
     ) {
-        let music_source = self.next_to_play.get_mut(0).unwrap();
+        let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
         match music_source {
             music_source::Source::Remote(remote_src) => {
-                self.played_video_ids.push(remote_src.video_id.clone());
-                self.remote_src_proc.set_audio_url_title(remote_src);
+                let played = self.played_video_ids.contains(&remote_src.video_id);
+                if !played {
+                    self.played_video_ids.push(remote_src.video_id.clone());
+                    if remote_src.audio_stream_url.is_empty() {
+                        self.remote_src_proc.set_audio_url_title(remote_src);
+                    }
+                }
                 tui_signal_send
                     .send(TuiSignals::UpdateTitle(format!(
                         "{}\n{}/{}",
@@ -127,45 +138,46 @@ impl MusicPlayerLogic {
                 tui_signal_send
                     .send(TuiSignals::UpdateDuration(remote_src.length))
                     .unwrap();
-                libmpv_signal_send
-                    .send(LibMpvSignals::PlayAudio(
-                        remote_src.audio_stream_url.to_string(),
-                    ))
-                    .unwrap();
+                if !played {
+                    libmpv_signal_send
+                        .send(LibMpvSignals::PlayAudio(
+                            remote_src.audio_stream_url.to_string(),
+                        ))
+                        .unwrap();
+                }
             }
             _ => panic!(),
         }
     }
 
     fn prepare_next_to_play(&mut self) {
-        let music_source = self.next_to_play.pop_front().unwrap();
-        let mut next_to_play: music_source::Source;
+        let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
         match music_source {
             music_source::Source::Remote(remote_src) => {
-                self.related_queue.push_back(remote_src.video_id.clone());
-                if self.next_to_play.is_empty() {
+                if !self.related_queue.contains(&remote_src.video_id) {
+                    self.related_queue.push_back(remote_src.video_id.clone());
+                }
+                if self.to_play_index == self.to_play.len() - 1 {
                     let related_video_id = self.related_queue.pop_front().unwrap();
                     self.related_queue.push_back(related_video_id.clone());
 
-                    next_to_play = self
+                    let mut next_to_play = self
                         .remote_src_proc
                         .get_related_video_url(&related_video_id, &self.played_video_ids);
-                } else {
-                    // TODO: rewrite this, highly inefficient
-                    next_to_play = self.next_to_play.pop_front().unwrap();
-                }
-                match &mut next_to_play {
-                    music_source::Source::Remote(next_to_play_src) => {
-                        self.played_video_ids
-                            .push(next_to_play_src.video_id.clone());
-                        self.remote_src_proc.set_audio_url_title(next_to_play_src);
+
+                    match &mut next_to_play {
+                        music_source::Source::Remote(next) => {
+                            self.remote_src_proc.set_audio_url_title(next);
+                        }
+                        _ => panic!(),
                     }
-                    _ => panic!(),
+
+                    self.to_play.push(next_to_play);
                 }
             }
             _ => panic!(),
         }
-        self.next_to_play.push_front(next_to_play);
+        self.to_play_index += 1;
     }
 }
 
