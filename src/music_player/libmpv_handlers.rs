@@ -5,8 +5,7 @@ pub enum LibMpvSignals {
     PlayAudio(String),
     PlayNext,
     PlayPrev,
-    Pause,
-    Resume,
+    PauseResume,
     SetVolume(i64),
     End,
 }
@@ -34,6 +33,10 @@ impl LibMpvHandler {
         let ev_ctx = self.mpv.create_event_context();
         ev_ctx.disable_deprecated_events()?;
 
+        ev_ctx
+            .observe_property("pause", libmpv::Format::Flag, 0)
+            .unwrap();
+
         Ok(ev_ctx)
     }
 
@@ -59,15 +62,10 @@ impl LibMpvHandler {
                                 )])
                                 .unwrap();
                         }
-                        LibMpvSignals::Pause => {
-                            self.mpv.set_property("pause", true).unwrap();
-                        }
-                        LibMpvSignals::Resume => {
-                            /*
-                            let current_pos = self.mpv.get_property::<f64>("time-pos").unwrap();
-                            println!("{current_pos}");
-                            */
-                            self.mpv.set_property("pause", false).unwrap();
+                        LibMpvSignals::PauseResume => {
+                            let mut pause: bool = self.mpv.get_property("pause").unwrap();
+                            pause = !pause;
+                            self.mpv.set_property("pause", pause).unwrap();
                         }
                         LibMpvSignals::PlayNext => {
                             self.mpv.playlist_next_force().unwrap();
@@ -102,8 +100,17 @@ pub fn libmpv_event_handling(
                 mp_logic_signal_send
                     .send(MusicPlayerLogicSignals::PlaybackEnded)
                     .unwrap();
-                //s_t.send(Signal::Exit).unwrap();
-                //println!("Exiting! Reason: {:?}", r);
+            }
+            Ok(libmpv::events::Event::PropertyChange {
+                name: "pause",
+                change: libmpv::events::PropertyData::Flag(pause),
+                ..
+            }) => {
+                if pause {
+                    tui_signal_send.send(TuiSignals::PlaybackPause).unwrap();
+                } else {
+                    tui_signal_send.send(TuiSignals::PlaybackResume).unwrap();
+                }
             }
 
             Ok(libmpv::events::Event::PropertyChange {

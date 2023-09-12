@@ -1,6 +1,7 @@
 mod music_source;
 
 use crate::music_player::libmpv_handlers::LibMpvSignals;
+use crate::music_player::music_player_os_interface::OSInterfaceSignals;
 use crate::music_player::music_player_tui::TuiSignals;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
@@ -86,18 +87,30 @@ impl MusicPlayerLogic {
         &mut self,
         libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
         tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
+        os_interface_signal_send: &crossbeam::channel::Sender<OSInterfaceSignals>,
     ) {
-        self.prepare_audio(libmpv_signal_send, tui_signal_send);
+        self.prepare_audio(
+            libmpv_signal_send,
+            tui_signal_send,
+            os_interface_signal_send,
+        );
         self.prepare_next_to_play();
         loop {
             if let Some(recv) = &self.mp_logic_signal_recv {
                 if let Ok(signal) = recv.recv() {
                     match signal {
                         MusicPlayerLogicSignals::PlaybackEnded => {
-                            self.prepare_audio(libmpv_signal_send, tui_signal_send);
+                            self.prepare_audio(
+                                libmpv_signal_send,
+                                tui_signal_send,
+                                os_interface_signal_send,
+                            );
                             self.prepare_next_to_play();
                         }
                         MusicPlayerLogicSignals::End => {
+                            os_interface_signal_send
+                                .send(OSInterfaceSignals::End)
+                                .unwrap();
                             break;
                         }
                         MusicPlayerLogicSignals::PlayPrev => {
@@ -115,6 +128,7 @@ impl MusicPlayerLogic {
         &mut self,
         libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
         tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
+        os_interface_signal_send: &crossbeam::channel::Sender<OSInterfaceSignals>,
     ) {
         let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
         match music_source {
@@ -137,6 +151,11 @@ impl MusicPlayerLogic {
                     .unwrap();
                 tui_signal_send
                     .send(TuiSignals::UpdateDuration(remote_src.length))
+                    .unwrap();
+                os_interface_signal_send
+                    .send(OSInterfaceSignals::UpdateMetadataTitle(
+                        remote_src.title.to_string(),
+                    ))
                     .unwrap();
                 if !played {
                     libmpv_signal_send

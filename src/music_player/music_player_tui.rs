@@ -175,15 +175,11 @@ impl MusicPlayerTUI {
 
 pub struct TUIUserInputHandler {
     volume: i64,
-    pause: bool,
 }
 
 impl TUIUserInputHandler {
     pub fn new(volume: i64) -> Self {
-        TUIUserInputHandler {
-            volume,
-            pause: false,
-        }
+        TUIUserInputHandler { volume }
     }
 
     pub fn handle_user_input(
@@ -236,14 +232,7 @@ impl TUIUserInputHandler {
                     .unwrap();
             }
             crossterm::event::KeyCode::Char(' ') => {
-                self.pause = !self.pause;
-                if self.pause {
-                    libmpv_signal_send.send(LibMpvSignals::Pause).unwrap();
-                    tui_signal_send.send(TuiSignals::PlaybackPause).unwrap();
-                } else {
-                    libmpv_signal_send.send(LibMpvSignals::Resume).unwrap();
-                    tui_signal_send.send(TuiSignals::PlaybackResume).unwrap();
-                }
+                libmpv_signal_send.send(LibMpvSignals::PauseResume).unwrap();
             }
             crossterm::event::KeyCode::Char(']') => {
                 self.update_volume(10);
