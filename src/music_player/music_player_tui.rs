@@ -20,6 +20,7 @@ pub enum TuiSignals {
     UpdateDuration(u64),
     UpdateState(TuiState),
     UpdateVolume(i64),
+    ModifyScroll(i16),
     End,
 }
 
@@ -70,13 +71,14 @@ impl MusicPlayerTUI {
         self.terminal.show_cursor().unwrap();
     }
 
-    pub fn draw(&mut self, text: &str) {
+    pub fn draw(&mut self, text: &str, scroll: u16) {
         self.terminal
             .draw(|f| {
                 let size = f.size();
                 let block = Block::default().title("RusTunes").borders(Borders::ALL);
                 let block = block.title_alignment(ratatui::layout::Alignment::Center);
                 let text = ratatui::widgets::Paragraph::new(text);
+                let text = text.scroll((scroll, 0));
                 let inner = block.inner(f.size());
                 f.render_widget(block, size);
                 f.render_widget(text, inner);
@@ -91,6 +93,7 @@ impl MusicPlayerTUI {
         let mut playback_start = std::time::SystemTime::now();
         let mut playback_start_offset = 0.0;
         let mut playback_paused = false;
+        let mut scroll: u16 = 0;
 
         loop {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -133,6 +136,13 @@ impl MusicPlayerTUI {
                         TuiSignals::End => {
                             break;
                         }
+                        TuiSignals::ModifyScroll(x) => {
+                            if x > 0 && scroll < (history.len() - 1) as u16 {
+                                scroll += 1;
+                            } else if x < 0 && scroll > 0 {
+                                scroll -= 1;
+                            }
+                        }
                     }
                 }
             }
@@ -159,14 +169,14 @@ impl MusicPlayerTUI {
                         "\n{} {} / {} vol: {}",
                         symbol, playback_time, duration, self.volume
                     ));
-                    self.draw(&to_draw);
+                    self.draw(&to_draw, 0);
                 }
                 TuiState::History => {
                     let mut to_draw = "".to_string();
                     history
                         .iter()
                         .for_each(|x| to_draw.push_str(&format!("{x}\n")));
-                    self.draw(&to_draw);
+                    self.draw(&to_draw, scroll);
                 }
             }
         }
@@ -174,12 +184,16 @@ impl MusicPlayerTUI {
 }
 
 pub struct TUIUserInputHandler {
+    tui_state: TuiState,
     volume: i64,
 }
 
 impl TUIUserInputHandler {
     pub fn new(volume: i64) -> Self {
-        TUIUserInputHandler { volume }
+        TUIUserInputHandler {
+            tui_state: TuiState::Player,
+            volume,
+        }
     }
 
     pub fn handle_user_input(
@@ -225,11 +239,13 @@ impl TUIUserInputHandler {
                 tui_signal_send
                     .send(TuiSignals::UpdateState(TuiState::Player))
                     .unwrap();
+                self.tui_state = TuiState::Player;
             }
             crossterm::event::KeyCode::Char('2') => {
                 tui_signal_send
                     .send(TuiSignals::UpdateState(TuiState::History))
                     .unwrap();
+                self.tui_state = TuiState::History;
             }
             crossterm::event::KeyCode::Char(' ') => {
                 libmpv_signal_send.send(LibMpvSignals::PauseResume).unwrap();
@@ -291,7 +307,28 @@ impl TUIUserInputHandler {
             _ => (),
         }
 
+        match self.tui_state {
+            TuiState::Player => (),
+            TuiState::History => self.handle_history_specific_keys(key, tui_signal_send),
+        }
+
         false
+    }
+
+    fn handle_history_specific_keys(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+        tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
+    ) {
+        match key.code {
+            crossterm::event::KeyCode::Char('j') => {
+                tui_signal_send.send(TuiSignals::ModifyScroll(1)).unwrap();
+            }
+            crossterm::event::KeyCode::Char('k') => {
+                tui_signal_send.send(TuiSignals::ModifyScroll(-1)).unwrap();
+            }
+            _ => (),
+        }
     }
 
     fn update_volume(&mut self, change: i64) {
