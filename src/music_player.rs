@@ -1,5 +1,13 @@
 mod libmpv_handlers;
 mod music_player_core;
+#[cfg_attr(
+    not(target_os = "android"),
+    path = "music_player/music_player_os_interface.rs"
+)]
+#[cfg_attr(
+    target_os = "android",
+    path = "music_player/music_player_os_interface_android.rs"
+)]
 mod music_player_os_interface;
 mod music_player_tui;
 

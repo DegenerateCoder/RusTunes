@@ -133,7 +133,7 @@ pub fn libmpv_event_handling(
             Ok(_e) => {
                 //println!("Event triggered: {:?}", e);
             }
-            Err(e) => println!("Event errored: {:?}", e),
+            Err(_e) => (), // println!("Event errored: {:?}", _e),
         }
     }
 }
