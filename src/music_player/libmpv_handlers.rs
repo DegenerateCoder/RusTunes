@@ -1,5 +1,5 @@
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
-use crate::music_player::music_player_tui::TuiSignals;
+use crate::music_player::tui::TuiSignals;
 
 pub enum LibMpvSignals {
     PlayAudio(String),

@@ -1,8 +1,8 @@
-use crate::music_player::libmpv_handlers::LibMpvSignals;
-use crate::music_player::music_player_core::MusicPlayerLogicSignals;
+pub mod commands;
+pub mod user_input_handler;
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture},
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -24,6 +24,7 @@ pub enum TuiSignals {
     End,
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub enum TuiState {
     Player,
     History,
@@ -179,164 +180,6 @@ impl MusicPlayerTUI {
                     self.draw(&to_draw, scroll);
                 }
             }
-        }
-    }
-}
-
-pub struct TUIUserInputHandler {
-    tui_state: TuiState,
-    volume: i64,
-}
-
-impl TUIUserInputHandler {
-    pub fn new(volume: i64) -> Self {
-        TUIUserInputHandler {
-            tui_state: TuiState::Player,
-            volume,
-        }
-    }
-
-    pub fn handle_user_input(
-        &mut self,
-        libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
-        tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
-        mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
-    ) {
-        loop {
-            let event = event::read();
-            if let Ok(event) = event {
-                match event {
-                    event::Event::Key(key) => {
-                        if self.handle_key_event(
-                            key,
-                            libmpv_signal_send,
-                            tui_signal_send,
-                            mp_logic_signal_send,
-                        ) {
-                            break;
-                        }
-                    }
-                    _ => (),
-                }
-            }
-        }
-    }
-
-    fn handle_key_event(
-        &mut self,
-        key: crossterm::event::KeyEvent,
-        libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
-        tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
-        mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
-    ) -> bool {
-        match key.code {
-            crossterm::event::KeyCode::Char('q') => {
-                libmpv_signal_send.send(LibMpvSignals::End).unwrap();
-                tui_signal_send.send(TuiSignals::End).unwrap();
-                return true;
-            }
-            crossterm::event::KeyCode::Char('1') => {
-                tui_signal_send
-                    .send(TuiSignals::UpdateState(TuiState::Player))
-                    .unwrap();
-                self.tui_state = TuiState::Player;
-            }
-            crossterm::event::KeyCode::Char('2') => {
-                tui_signal_send
-                    .send(TuiSignals::UpdateState(TuiState::History))
-                    .unwrap();
-                self.tui_state = TuiState::History;
-            }
-            crossterm::event::KeyCode::Char(' ') => {
-                libmpv_signal_send.send(LibMpvSignals::PauseResume).unwrap();
-            }
-            crossterm::event::KeyCode::Char(']') => {
-                self.update_volume(10);
-
-                tui_signal_send
-                    .send(TuiSignals::UpdateVolume(self.volume))
-                    .unwrap();
-
-                libmpv_signal_send
-                    .send(LibMpvSignals::SetVolume(self.volume))
-                    .unwrap();
-            }
-            crossterm::event::KeyCode::Char('[') => {
-                self.update_volume(-10);
-
-                tui_signal_send
-                    .send(TuiSignals::UpdateVolume(self.volume))
-                    .unwrap();
-
-                libmpv_signal_send
-                    .send(LibMpvSignals::SetVolume(self.volume))
-                    .unwrap();
-            }
-            crossterm::event::KeyCode::Char('}') => {
-                self.update_volume(1);
-
-                tui_signal_send
-                    .send(TuiSignals::UpdateVolume(self.volume))
-                    .unwrap();
-
-                libmpv_signal_send
-                    .send(LibMpvSignals::SetVolume(self.volume))
-                    .unwrap();
-            }
-            crossterm::event::KeyCode::Char('{') => {
-                self.update_volume(-1);
-
-                tui_signal_send
-                    .send(TuiSignals::UpdateVolume(self.volume))
-                    .unwrap();
-
-                libmpv_signal_send
-                    .send(LibMpvSignals::SetVolume(self.volume))
-                    .unwrap();
-            }
-            crossterm::event::KeyCode::Char('b') => {
-                libmpv_signal_send.send(LibMpvSignals::PlayNext).unwrap();
-            }
-            crossterm::event::KeyCode::Char('z') => {
-                mp_logic_signal_send
-                    .send(MusicPlayerLogicSignals::PlayPrev)
-                    .unwrap();
-                libmpv_signal_send.send(LibMpvSignals::PlayPrev).unwrap();
-            }
-
-            _ => (),
-        }
-
-        match self.tui_state {
-            TuiState::Player => (),
-            TuiState::History => self.handle_history_specific_keys(key, tui_signal_send),
-        }
-
-        false
-    }
-
-    fn handle_history_specific_keys(
-        &mut self,
-        key: crossterm::event::KeyEvent,
-        tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
-    ) {
-        match key.code {
-            crossterm::event::KeyCode::Char('j') => {
-                tui_signal_send.send(TuiSignals::ModifyScroll(1)).unwrap();
-            }
-            crossterm::event::KeyCode::Char('k') => {
-                tui_signal_send.send(TuiSignals::ModifyScroll(-1)).unwrap();
-            }
-            _ => (),
-        }
-    }
-
-    fn update_volume(&mut self, change: i64) {
-        self.volume += change;
-        if self.volume > 100 {
-            self.volume = 100;
-        } else if self.volume < 0 {
-            self.volume = 0;
         }
     }
 }

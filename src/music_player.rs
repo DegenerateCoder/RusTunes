@@ -9,16 +9,16 @@ mod music_player_core;
     path = "music_player/music_player_os_interface_android.rs"
 )]
 mod music_player_os_interface;
-mod music_player_tui;
+mod tui;
 
 pub struct MusicPlayer {
     libmpv: libmpv_handlers::LibMpvHandler,
     libmpv_signal_send: crossbeam::channel::Sender<libmpv_handlers::LibMpvSignals>,
     music_player_logic: music_player_core::MusicPlayerLogic,
     mp_logic_signal_send: crossbeam::channel::Sender<music_player_core::MusicPlayerLogicSignals>,
-    music_player_tui: music_player_tui::MusicPlayerTUI,
-    tui_signal_send: crossbeam::channel::Sender<music_player_tui::TuiSignals>,
-    tui_input_handler: music_player_tui::TUIUserInputHandler,
+    tui: tui::MusicPlayerTUI,
+    tui_signal_send: crossbeam::channel::Sender<tui::TuiSignals>,
+    tui_input_handler: tui::user_input_handler::TUIUserInputHandler,
     music_player_os_interface: music_player_os_interface::MediaPlayerOSInterface,
     os_interface_signal_send:
         crossbeam::channel::Sender<music_player_os_interface::OSInterfaceSignals>,
@@ -36,11 +36,11 @@ impl MusicPlayer {
             libmpv_handlers::LibMpvHandler::initialize_libmpv(config.mpv_base_volume).unwrap();
         let libmpv_signal_send = libmpv.create_signal_channel();
 
-        let mut music_player_tui =
-            music_player_tui::MusicPlayerTUI::setup_terminal(config.mpv_base_volume);
+        let mut music_player_tui = tui::MusicPlayerTUI::setup_terminal(config.mpv_base_volume);
         let tui_signal_send = music_player_tui.create_signal_channel();
 
-        let tui_input_handler = music_player_tui::TUIUserInputHandler::new(config.mpv_base_volume);
+        let tui_input_handler =
+            tui::user_input_handler::TUIUserInputHandler::new(config.mpv_base_volume);
 
         let mut music_player_logic = music_player_core::MusicPlayerLogic::new(config);
         let mp_logic_signal_send = music_player_logic.create_signal_channel();
@@ -54,7 +54,7 @@ impl MusicPlayer {
             libmpv_signal_send,
             music_player_logic,
             mp_logic_signal_send,
-            music_player_tui,
+            tui: music_player_tui,
             tui_signal_send,
             tui_input_handler,
             music_player_os_interface,
@@ -68,7 +68,7 @@ impl MusicPlayer {
 
         crossbeam::scope(|scope| {
             scope.spawn(|_| self.libmpv.handle_signals());
-            scope.spawn(|_| self.music_player_tui.handle_signals());
+            scope.spawn(|_| self.tui.handle_signals());
             scope.spawn(|_| {
                 libmpv_handlers::libmpv_event_handling(
                     ev_ctx,
@@ -98,6 +98,6 @@ impl MusicPlayer {
         })
         .unwrap();
 
-        self.music_player_tui.restore_terminal();
+        self.tui.restore_terminal();
     }
 }

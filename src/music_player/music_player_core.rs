@@ -2,7 +2,7 @@ mod music_source;
 
 use crate::music_player::libmpv_handlers::LibMpvSignals;
 use crate::music_player::music_player_os_interface::OSInterfaceSignals;
-use crate::music_player::music_player_tui::TuiSignals;
+use crate::music_player::tui::TuiSignals;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::VecDeque;
