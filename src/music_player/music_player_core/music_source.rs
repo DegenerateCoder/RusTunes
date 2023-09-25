@@ -24,52 +24,71 @@ pub enum Source {
     _Local(Local),
 }
 
+#[derive(Debug)]
+pub enum Error {
+    InvalidVideoUrl(String),
+    InvalidPlaylistUrl(String),
+    ReqwestError(reqwest::Error),
+    NoRelatedVideoFound(String),
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
+        Error::ReqwestError(err)
+    }
+}
+
 impl Source {
-    pub fn new_remote(path: &str) -> Self {
-        if path.starts_with("https://") || path.contains("/watch?") {
-            Source::Remote(Remote::new(path))
-        } else {
-            panic!("Not a valid url: {path}");
-        }
+    pub fn new_remote(path: &str) -> Result<Self, Error> {
+        Ok(Source::Remote(Remote::new(path)?))
     }
 }
 
 impl Remote {
-    pub fn new(path: &str) -> Self {
-        Remote {
+    pub fn new(path: &str) -> Result<Self, Error> {
+        Ok(Remote {
             url: path.to_string(),
-            video_id: Remote::url_into_video_id(path),
+            video_id: Remote::url_into_video_id(path)?,
             audio_stream_url: "".to_string(),
             title: "".to_string(),
             length: 0,
+        })
+    }
+
+    pub fn url_into_video_id(url: &str) -> Result<String, Error> {
+        if url.contains("v=") {
+            let split = url.split("v=");
+            let id = split.last().unwrap().to_string();
+
+            Ok(id)
+        } else {
+            Err(Error::InvalidVideoUrl(format!(
+                "Not a valid youtube/piped video url: {url}, url must contain 'v='"
+            )))
         }
     }
 
-    pub fn url_into_video_id(url: &str) -> String {
-        let split = url.split("v=");
-        let id = split.last().unwrap().to_string();
+    pub fn url_into_playlist_id(url: &str) -> Result<String, Error> {
+        if url.contains("list=") {
+            let split = url.split("list=");
+            let id = split.last().unwrap().to_string();
 
-        id
-    }
-
-    pub fn url_into_playlist_id(url: &str) -> String {
-        let split = url.split("list=");
-        let id = split.last().unwrap().to_string();
-
-        id
+            Ok(id)
+        } else {
+            Err(Error::InvalidPlaylistUrl(format!(
+                "Not a valid youtube/piped playlist url: {url}, url must contain 'list='"
+            )))
+        }
     }
 }
 
 impl RemoteSourceProcessor {
-    pub fn set_audio_url_title(&self, source: &mut Remote) {
+    pub fn set_audio_url_title(&self, source: &mut Remote) -> Result<(), Error> {
         let request_url = format!(
             "{}/streams/{}",
             self.piped_api_domains[self.piped_api_domain_index], &source.video_id
         );
-        let mut response: serde_json::Value = reqwest::blocking::get(&request_url)
-            .unwrap()
-            .json()
-            .unwrap();
+        let mut response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
         let audio_streams: &mut Vec<serde_json::Value> = response
             .get_mut("audioStreams")
             .unwrap()
@@ -84,31 +103,31 @@ impl RemoteSourceProcessor {
         source.title = music_title.to_string();
         let duration = response.get("duration").unwrap();
         source.length = duration.as_u64().unwrap();
+
+        Ok(())
     }
 
-    pub fn get_video_genre(&self, source: &Remote) -> String {
+    pub fn get_video_genre(&self, source: &Remote) -> Result<String, Error> {
         let request_url = format!(
             "{}/api/v1/videos/{}",
             self.invidious_api_domains[self.invidious_api_domain_index], &source.video_id
         );
-        let response: serde_json::Value = reqwest::blocking::get(&request_url)
-            .unwrap()
-            .json()
-            .unwrap();
+        let response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
         let genre: String = response.get("genre").unwrap().as_str().unwrap().to_string();
 
-        genre
+        Ok(genre)
     }
 
-    pub fn get_related_video_url(&self, video_id: &str, played_video_ids: &Vec<String>) -> Source {
+    pub fn get_related_video_url(
+        &self,
+        video_id: &str,
+        played_video_ids: &Vec<String>,
+    ) -> Result<Source, Error> {
         let request_url = format!(
             "{}/streams/{}",
             self.piped_api_domains[self.piped_api_domain_index], video_id
         );
-        let mut response: serde_json::Value = reqwest::blocking::get(&request_url)
-            .unwrap()
-            .json()
-            .unwrap();
+        let mut response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
         let related_streams: &mut Vec<serde_json::Value> = response
             .get_mut("relatedStreams")
             .unwrap()
@@ -125,12 +144,15 @@ impl RemoteSourceProcessor {
                 related_video_url,
                 related_stream,
                 played_video_ids,
-            ) {
+            )? {
                 //println!("Next to play: {related_video_url} <- from {video_id}");
-                return Source::new_remote(related_video_url);
+                return Ok(Source::new_remote(related_video_url)?);
             }
         }
-        panic!("No related videos found");
+        Err(Error::NoRelatedVideoFound(format!(
+            "No related videos found for video_id: {}",
+            video_id
+        )))
     }
 
     fn check_filters_for_related_video_url(
@@ -138,37 +160,34 @@ impl RemoteSourceProcessor {
         video_url: &str,
         stream_json: &serde_json::Value,
         played_video_ids: &Vec<String>,
-    ) -> bool {
-        let new_remote_src = Source::new_remote(video_url);
+    ) -> Result<bool, Error> {
+        let new_remote_src = Source::new_remote(video_url)?;
         match new_remote_src {
             Source::Remote(remote_src) => {
                 let video_id = &remote_src.video_id;
                 if played_video_ids.contains(video_id) {
-                    return false;
+                    return Ok(false);
                 } else if stream_json.get("duration").unwrap().as_u64().unwrap_or(self.duration_limit+1)// .unwrap()
                     > self.duration_limit
                 {
-                    return false;
-                } else if !self.get_video_genre(&remote_src).contains("Music") {
-                    return false;
+                    return Ok(false);
+                } else if !self.get_video_genre(&remote_src)?.contains("Music") {
+                    return Ok(false);
                 }
             }
             _ => panic!(),
         }
-        true
+        Ok(true)
     }
 
-    pub fn playlist_to_remote_vec(&self, playlist_id: &str) -> Vec<Source> {
+    pub fn playlist_to_remote_vec(&self, playlist_id: &str) -> Result<Vec<Source>, Error> {
         let mut playlist = Vec::new();
         let request_url = format!(
             "{}/playlists/{}",
             self.piped_api_domains[self.piped_api_domain_index], playlist_id
         );
 
-        let mut response: serde_json::Value = reqwest::blocking::get(&request_url)
-            .unwrap()
-            .json()
-            .unwrap();
+        let mut response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
 
         loop {
             let related_streams: &mut Vec<serde_json::Value> = response
@@ -179,7 +198,7 @@ impl RemoteSourceProcessor {
 
             for stream in related_streams {
                 let url = stream.get("url").unwrap().as_str().unwrap().to_string();
-                let video_id = Remote::url_into_video_id(&url);
+                let video_id = Remote::url_into_video_id(&url).unwrap();
 
                 playlist.push(Source::Remote(Remote {
                     url,
@@ -203,12 +222,9 @@ impl RemoteSourceProcessor {
                 urlencoding::encode(&nextpage)
             );
 
-            response = reqwest::blocking::get(&request_url)
-                .unwrap()
-                .json()
-                .unwrap();
+            response = reqwest::blocking::get(&request_url)?.json()?;
         }
 
-        playlist
+        Ok(playlist)
     }
 }

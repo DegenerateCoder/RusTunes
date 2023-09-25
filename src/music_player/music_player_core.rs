@@ -65,10 +65,10 @@ impl MusicPlayerLogic {
 
     pub fn process_user_input(&mut self, user_input: &str) {
         if user_input.contains("list=") {
-            self.playlist_to_play = music_source::Remote::url_into_playlist_id(user_input);
+            self.playlist_to_play = music_source::Remote::url_into_playlist_id(user_input).unwrap();
             self.prepare_playlist();
         } else {
-            let music_source = music_source::Source::new_remote(user_input);
+            let music_source = music_source::Source::new_remote(user_input).unwrap();
             self.to_play.push(music_source);
         }
     }
@@ -76,7 +76,8 @@ impl MusicPlayerLogic {
     fn prepare_playlist(&mut self) {
         self.to_play = self
             .remote_src_proc
-            .playlist_to_remote_vec(&self.playlist_to_play);
+            .playlist_to_remote_vec(&self.playlist_to_play)
+            .unwrap();
 
         if self.shuffle_playlist {
             self.to_play.shuffle(&mut thread_rng());
@@ -137,7 +138,9 @@ impl MusicPlayerLogic {
                 if !played {
                     self.played_video_ids.push(remote_src.video_id.clone());
                     if remote_src.audio_stream_url.is_empty() {
-                        self.remote_src_proc.set_audio_url_title(remote_src);
+                        self.remote_src_proc
+                            .set_audio_url_title(remote_src)
+                            .unwrap();
                     }
                 }
                 tui_signal_send
@@ -182,11 +185,12 @@ impl MusicPlayerLogic {
 
                     let mut next_to_play = self
                         .remote_src_proc
-                        .get_related_video_url(&related_video_id, &self.played_video_ids);
+                        .get_related_video_url(&related_video_id, &self.played_video_ids)
+                        .unwrap();
 
                     match &mut next_to_play {
                         music_source::Source::Remote(next) => {
-                            self.remote_src_proc.set_audio_url_title(next);
+                            self.remote_src_proc.set_audio_url_title(next).unwrap();
                         }
                         _ => panic!(),
                     }
