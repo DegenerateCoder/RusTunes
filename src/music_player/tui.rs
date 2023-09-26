@@ -13,7 +13,9 @@ use ratatui::{
 };
 
 pub enum TuiSignals {
-    PlaybackStart,
+    Start,
+    AudioReady,
+    End,
     PlaybackPause,
     PlaybackResume,
     UpdateTitle(String),
@@ -21,7 +23,7 @@ pub enum TuiSignals {
     UpdateState(TuiState),
     UpdateVolume(i64),
     ModifyScroll(i16),
-    End,
+    Quit,
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -93,7 +95,8 @@ impl MusicPlayerTUI {
         let mut duration = 0;
         let mut playback_start = std::time::SystemTime::now();
         let mut playback_start_offset = 0.0;
-        let mut playback_paused = false;
+        let mut playback_paused = true;
+        let mut audio_ready = false;
         let mut scroll: u16 = 0;
 
         loop {
@@ -101,9 +104,15 @@ impl MusicPlayerTUI {
             if let Some(recv) = &self.tui_signal_recv {
                 if let Ok(signal) = recv.try_recv() {
                     match signal {
-                        TuiSignals::PlaybackStart => {
+                        TuiSignals::Start => audio_ready = false,
+                        TuiSignals::AudioReady => {
                             playback_start = std::time::SystemTime::now();
+                            audio_ready = true;
+                            playback_paused = false;
+                        }
+                        TuiSignals::End => {
                             playback_start_offset = 0.0;
+                            playback_paused = true;
                         }
                         TuiSignals::PlaybackPause => {
                             playback_start_offset +=
@@ -134,7 +143,7 @@ impl MusicPlayerTUI {
                         TuiSignals::UpdateDuration(dur) => {
                             duration = dur;
                         }
-                        TuiSignals::End => {
+                        TuiSignals::Quit => {
                             break;
                         }
                         TuiSignals::ModifyScroll(x) => {
@@ -150,7 +159,9 @@ impl MusicPlayerTUI {
             match self.tui_state {
                 TuiState::Player => {
                     let playback_time = {
-                        if playback_paused {
+                        if !audio_ready {
+                            0.0
+                        } else if playback_paused {
                             playback_start_offset
                         } else {
                             playback_start_offset + playback_start.elapsed().unwrap().as_secs_f64()
@@ -159,7 +170,9 @@ impl MusicPlayerTUI {
                     let mut playback_time = playback_time.ceil() as u64;
                     playback_time = playback_time.min(duration);
                     let symbol = {
-                        if playback_paused {
+                        if !audio_ready {
+                            "|"
+                        } else if playback_paused {
                             "|"
                         } else {
                             ">"

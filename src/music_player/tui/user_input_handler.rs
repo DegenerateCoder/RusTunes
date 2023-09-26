@@ -61,7 +61,7 @@ impl TUIUserInputHandler {
             match action {
                 Action::Quit => {
                     libmpv_signal_send.send(LibMpvSignals::End).unwrap();
-                    tui_signal_send.send(TuiSignals::End).unwrap();
+                    tui_signal_send.send(TuiSignals::Quit).unwrap();
                     return true;
                 }
                 Action::ViewPlayer => {

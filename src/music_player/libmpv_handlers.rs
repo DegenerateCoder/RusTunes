@@ -97,6 +97,7 @@ pub fn libmpv_event_handling(
 
         match ev {
             Ok(libmpv::events::Event::EndFile(_r)) => {
+                tui_signal_send.send(TuiSignals::End).unwrap();
                 mp_logic_signal_send
                     .send(MusicPlayerLogicSignals::PlaybackEnded)
                     .unwrap();
@@ -122,7 +123,10 @@ pub fn libmpv_event_handling(
                 //println!("Seekable ranges updated: {:?}", ranges);
             }
             Ok(libmpv::events::Event::StartFile) => {
-                tui_signal_send.send(TuiSignals::PlaybackStart).unwrap();
+                tui_signal_send.send(TuiSignals::Start).unwrap();
+            }
+            Ok(libmpv::events::Event::PlaybackRestart) => {
+                tui_signal_send.send(TuiSignals::AudioReady).unwrap();
             }
             Ok(libmpv::events::Event::Shutdown) => {
                 mp_logic_signal_send
