@@ -44,13 +44,13 @@ impl MusicPlayerLogic {
             shuffle_playlist: config.shuffle_playlist,
             played_video_ids: Vec::new(),
             related_queue: VecDeque::new(),
-            remote_src_proc: music_source::RemoteSourceProcessor {
-                piped_api_domains: config.piped_api_domains,
-                piped_api_domain_index: config.piped_api_domain_index,
-                invidious_api_domains: config.invidious_api_domains,
-                invidious_api_domain_index: config.invidious_api_domain_index,
-                duration_limit: config.video_duration_limit_s,
-            },
+            remote_src_proc: music_source::RemoteSourceProcessor::new(
+                config.piped_api_domains,
+                config.piped_api_domain_index,
+                config.invidious_api_domains,
+                config.invidious_api_domain_index,
+                config.video_duration_limit_s,
+            ),
             mp_logic_signal_recv: None,
         }
     }
@@ -74,10 +74,21 @@ impl MusicPlayerLogic {
     }
 
     fn prepare_playlist(&mut self) {
-        self.to_play = self
+        let mut to_play = self
             .remote_src_proc
-            .playlist_to_remote_vec(&self.playlist_to_play)
-            .unwrap();
+            .playlist_to_remote_vec(&self.playlist_to_play);
+
+        while to_play.is_err() {
+            let update = self.remote_src_proc.next_piped_api_domains_index();
+            if update.is_err() {
+                self.piped_api_domains_error();
+            }
+            to_play = self
+                .remote_src_proc
+                .playlist_to_remote_vec(&self.playlist_to_play);
+        }
+
+        self.to_play = to_play.unwrap();
 
         if self.shuffle_playlist {
             self.to_play.shuffle(&mut thread_rng());
@@ -138,17 +149,24 @@ impl MusicPlayerLogic {
                 if !played {
                     self.played_video_ids.push(remote_src.video_id.clone());
                     if remote_src.audio_stream_url.is_empty() {
-                        self.remote_src_proc
+                        while self
+                            .remote_src_proc
                             .set_audio_url_title(remote_src)
-                            .unwrap();
+                            .is_err()
+                        {
+                            let update = self.remote_src_proc.next_piped_api_domains_index();
+                            if update.is_err() {
+                                self.piped_api_domains_error();
+                                return;
+                            }
+                        }
                     }
                 }
                 tui_signal_send
                     .send(TuiSignals::UpdateTitle(format!(
                         "{}\n{}/{}",
                         remote_src.title.to_string(),
-                        self.remote_src_proc.piped_api_domains
-                            [self.remote_src_proc.piped_api_domain_index],
+                        self.remote_src_proc.get_piped_api_domain(),
                         remote_src.video_id
                     )))
                     .unwrap();
@@ -185,12 +203,27 @@ impl MusicPlayerLogic {
 
                     let mut next_to_play = self
                         .remote_src_proc
-                        .get_related_video_url(&related_video_id, &self.played_video_ids)
-                        .unwrap();
+                        .get_related_video_url(&related_video_id, &self.played_video_ids);
+
+                    while next_to_play.is_err() {
+                        let update = self.remote_src_proc.next_piped_api_domains_index();
+                        if update.is_err() {
+                            self.piped_api_domains_error();
+                        }
+                        next_to_play = self
+                            .remote_src_proc
+                            .get_related_video_url(&related_video_id, &self.played_video_ids);
+                    }
+                    let mut next_to_play = next_to_play.unwrap();
 
                     match &mut next_to_play {
                         music_source::Source::Remote(next) => {
-                            self.remote_src_proc.set_audio_url_title(next).unwrap();
+                            while self.remote_src_proc.set_audio_url_title(next).is_err() {
+                                let update = self.remote_src_proc.next_piped_api_domains_index();
+                                if update.is_err() {
+                                    self.piped_api_domains_error();
+                                }
+                            }
                         }
                         _ => panic!(),
                     }
@@ -201,6 +234,11 @@ impl MusicPlayerLogic {
             _ => panic!(),
         }
         self.to_play_index += 1;
+    }
+
+    fn piped_api_domains_error(&self) {
+        // Use https://piped-instances.kavin.rocks/
+        unimplemented!();
     }
 }
 

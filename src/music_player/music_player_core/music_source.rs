@@ -1,9 +1,10 @@
 pub struct RemoteSourceProcessor {
-    pub piped_api_domains: Vec<String>,
-    pub piped_api_domain_index: usize,
-    pub invidious_api_domains: Vec<String>,
-    pub invidious_api_domain_index: usize,
-    pub duration_limit: u64,
+    piped_api_domains: Vec<String>,
+    piped_api_domain_index: usize,
+    invidious_api_domains: Vec<String>,
+    invidious_api_domain_index: usize,
+    duration_limit: u64,
+    piped_api_domain_index_start: usize,
 }
 
 #[derive(Clone)]
@@ -30,6 +31,7 @@ pub enum Error {
     InvalidPlaylistUrl(String),
     ReqwestError(reqwest::Error),
     NoRelatedVideoFound(String),
+    AllPipedApiDomainsDown(String),
 }
 
 impl From<reqwest::Error> for Error {
@@ -83,10 +85,52 @@ impl Remote {
 }
 
 impl RemoteSourceProcessor {
-    pub fn set_audio_url_title(&self, source: &mut Remote) -> Result<(), Error> {
+    pub fn new(
+        piped_api_domains: Vec<String>,
+        piped_api_domain_index: usize,
+        invidious_api_domains: Vec<String>,
+        invidious_api_domain_index: usize,
+        duration_limit: u64,
+    ) -> Self {
+        Self {
+            piped_api_domains,
+            piped_api_domain_index,
+            invidious_api_domains,
+            invidious_api_domain_index,
+            duration_limit,
+            piped_api_domain_index_start: piped_api_domain_index,
+        }
+    }
+
+    pub fn next_piped_api_domains_index(&mut self) -> Result<(), Error> {
+        let mut i = self.piped_api_domain_index;
+        i += 1;
+        if i >= self.piped_api_domains.len() {
+            i = 0;
+        }
+        if i == self.piped_api_domain_index_start {
+            Err(Error::AllPipedApiDomainsDown(
+                "All piped api domains are unrechable".to_string(),
+            ))
+        } else {
+            self.piped_api_domain_index = i;
+            Ok(())
+        }
+    }
+
+    pub fn get_piped_api_domain(&self) -> &str {
+        &self.piped_api_domains[self.piped_api_domain_index]
+    }
+
+    pub fn get_invidious_api_domains(&self) -> &str {
+        &self.invidious_api_domains[self.invidious_api_domain_index]
+    }
+
+    pub fn set_audio_url_title(&mut self, source: &mut Remote) -> Result<(), Error> {
         let request_url = format!(
             "{}/streams/{}",
-            self.piped_api_domains[self.piped_api_domain_index], &source.video_id
+            self.get_piped_api_domain(),
+            &source.video_id
         );
         let mut response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
         let audio_streams: &mut Vec<serde_json::Value> = response
@@ -104,13 +148,15 @@ impl RemoteSourceProcessor {
         let duration = response.get("duration").unwrap();
         source.length = duration.as_u64().unwrap();
 
+        self.piped_api_domain_index_start = self.piped_api_domain_index;
         Ok(())
     }
 
     pub fn get_video_genre(&self, source: &Remote) -> Result<String, Error> {
         let request_url = format!(
             "{}/api/v1/videos/{}",
-            self.invidious_api_domains[self.invidious_api_domain_index], &source.video_id
+            self.get_invidious_api_domains(),
+            &source.video_id
         );
         let response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
         let genre: String = response.get("genre").unwrap().as_str().unwrap().to_string();
@@ -119,14 +165,11 @@ impl RemoteSourceProcessor {
     }
 
     pub fn get_related_video_url(
-        &self,
+        &mut self,
         video_id: &str,
         played_video_ids: &Vec<String>,
     ) -> Result<Source, Error> {
-        let request_url = format!(
-            "{}/streams/{}",
-            self.piped_api_domains[self.piped_api_domain_index], video_id
-        );
+        let request_url = format!("{}/streams/{}", self.get_piped_api_domain(), video_id);
         let mut response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
         let related_streams: &mut Vec<serde_json::Value> = response
             .get_mut("relatedStreams")
@@ -146,6 +189,8 @@ impl RemoteSourceProcessor {
                 played_video_ids,
             )? {
                 //println!("Next to play: {related_video_url} <- from {video_id}");
+
+                self.piped_api_domain_index_start = self.piped_api_domain_index;
                 return Ok(Source::new_remote(related_video_url)?);
             }
         }
@@ -180,12 +225,9 @@ impl RemoteSourceProcessor {
         Ok(true)
     }
 
-    pub fn playlist_to_remote_vec(&self, playlist_id: &str) -> Result<Vec<Source>, Error> {
+    pub fn playlist_to_remote_vec(&mut self, playlist_id: &str) -> Result<Vec<Source>, Error> {
         let mut playlist = Vec::new();
-        let request_url = format!(
-            "{}/playlists/{}",
-            self.piped_api_domains[self.piped_api_domain_index], playlist_id
-        );
+        let request_url = format!("{}/playlists/{}", self.get_piped_api_domain(), playlist_id);
 
         let mut response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
 
@@ -217,7 +259,7 @@ impl RemoteSourceProcessor {
             let nextpage = nextpage.as_str().unwrap().to_owned();
             let request_url = format!(
                 "{}/nextpage/playlists/{}?nextpage={}",
-                self.piped_api_domains[self.piped_api_domain_index],
+                self.get_piped_api_domain(),
                 playlist_id,
                 urlencoding::encode(&nextpage)
             );
@@ -225,6 +267,7 @@ impl RemoteSourceProcessor {
             response = reqwest::blocking::get(&request_url)?.json()?;
         }
 
+        self.piped_api_domain_index_start = self.piped_api_domain_index;
         Ok(playlist)
     }
 }
