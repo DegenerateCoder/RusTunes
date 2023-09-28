@@ -5,10 +5,15 @@ use crate::music_player::tui::TuiSignals;
 use crate::music_player::tui::TuiState;
 use crossterm::event;
 
+pub enum TuiInputHandlerSignals {
+    Quit,
+}
+
 pub struct TUIUserInputHandler {
     tui_state: TuiState,
     volume: i64,
     commands: TuiCommands,
+    tui_input_handler_signal_recv: Option<crossbeam::channel::Receiver<TuiInputHandlerSignals>>,
 }
 
 impl TUIUserInputHandler {
@@ -17,7 +22,16 @@ impl TUIUserInputHandler {
             tui_state: TuiState::Player,
             volume,
             commands: TuiCommands::new(),
+            tui_input_handler_signal_recv: None,
         }
+    }
+
+    pub fn create_signal_channel(&mut self) -> crossbeam::channel::Sender<TuiInputHandlerSignals> {
+        let (s, r) = crossbeam::channel::unbounded();
+
+        self.tui_input_handler_signal_recv = Some(r);
+
+        s
     }
 
     pub fn handle_user_input(
@@ -27,20 +41,32 @@ impl TUIUserInputHandler {
         mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
     ) {
         loop {
-            let event = event::read();
-            if let Ok(event) = event {
-                match event {
-                    event::Event::Key(key) => {
-                        if self.handle_key_event(
-                            key,
-                            libmpv_signal_send,
-                            tui_signal_send,
-                            mp_logic_signal_send,
-                        ) {
-                            break;
+            if event::poll(std::time::Duration::from_millis(100)).unwrap() {
+                let event = event::read();
+                if let Ok(event) = event {
+                    match event {
+                        event::Event::Key(key) => {
+                            if self.handle_key_event(
+                                key,
+                                libmpv_signal_send,
+                                tui_signal_send,
+                                mp_logic_signal_send,
+                            ) {
+                                break;
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            } else {
+                if let Some(recv) = &self.tui_input_handler_signal_recv {
+                    if let Ok(signal) = recv.try_recv() {
+                        match signal {
+                            TuiInputHandlerSignals::Quit => {
+                                break;
+                            }
                         }
                     }
-                    _ => (),
                 }
             }
         }

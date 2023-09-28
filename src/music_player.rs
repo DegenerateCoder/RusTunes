@@ -11,10 +11,10 @@ mod music_player_core;
 mod music_player_os_interface;
 mod tui;
 
-pub struct MusicPlayer {
+pub struct MusicPlayer<'a> {
     libmpv: libmpv_handlers::LibMpvHandler,
     libmpv_signal_send: crossbeam::channel::Sender<libmpv_handlers::LibMpvSignals>,
-    music_player_logic: music_player_core::MusicPlayerLogic,
+    music_player_logic: music_player_core::MusicPlayerLogic<'a>,
     mp_logic_signal_send: crossbeam::channel::Sender<music_player_core::MusicPlayerLogicSignals>,
     tui: tui::MusicPlayerTUI,
     tui_signal_send: crossbeam::channel::Sender<tui::TuiSignals>,
@@ -24,7 +24,7 @@ pub struct MusicPlayer {
         crossbeam::channel::Sender<music_player_os_interface::OSInterfaceSignals>,
 }
 
-impl MusicPlayer {
+impl<'a> MusicPlayer<'a> {
     pub fn new() -> Self {
         let config = std::fs::read_to_string("conf.json").unwrap_or_else(|_| {
             println!("Using default config");
@@ -62,9 +62,17 @@ impl MusicPlayer {
         }
     }
 
-    pub fn play(&mut self, user_input: &str) {
+    pub fn play(&'a mut self, user_input: &str) {
         let ev_ctx = self.libmpv.create_event_context();
         let ev_ctx = ev_ctx.unwrap();
+
+        let tui_input_handler_send = self.tui_input_handler.create_signal_channel();
+        self.music_player_logic.set_signal_senders(
+            &self.libmpv_signal_send,
+            &self.os_interface_signal_send,
+            &self.tui_signal_send,
+            tui_input_handler_send,
+        );
 
         crossbeam::scope(|scope| {
             scope.spawn(|_| self.libmpv.handle_signals());
@@ -78,22 +86,18 @@ impl MusicPlayer {
             });
             scope.spawn(|_| {
                 self.music_player_logic.process_user_input(user_input);
-                self.music_player_logic.handle_playback_logic(
-                    &self.libmpv_signal_send,
-                    &self.tui_signal_send,
-                    &self.os_interface_signal_send,
-                );
+                self.music_player_logic.handle_playback_logic();
             });
             scope.spawn(|_| {
                 self.tui_input_handler.handle_user_input(
                     &self.libmpv_signal_send,
                     &self.tui_signal_send,
                     &self.mp_logic_signal_send,
-                );
+                )
             });
             scope.spawn(|_| {
                 self.music_player_os_interface
-                    .handle_signals(&self.libmpv_signal_send, &self.mp_logic_signal_send);
+                    .handle_signals(&self.libmpv_signal_send, &self.mp_logic_signal_send)
             });
         })
         .unwrap();
