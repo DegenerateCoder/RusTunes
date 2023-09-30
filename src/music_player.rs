@@ -1,3 +1,4 @@
+use music_player_core::music_source::Error;
 mod libmpv_handlers;
 mod music_player_core;
 #[cfg_attr(
@@ -74,6 +75,7 @@ impl<'a> MusicPlayer<'a> {
             tui_input_handler_send,
         );
 
+        let mut error: Result<(), Error> = Ok(());
         crossbeam::scope(|scope| {
             scope.spawn(|_| self.libmpv.handle_signals());
             scope.spawn(|_| self.tui.handle_signals());
@@ -85,8 +87,10 @@ impl<'a> MusicPlayer<'a> {
                 )
             });
             scope.spawn(|_| {
-                self.music_player_logic.process_user_input(user_input);
-                self.music_player_logic.handle_playback_logic();
+                error = self.music_player_logic.process_user_input(user_input);
+                if error.is_ok() {
+                    error = self.music_player_logic.handle_playback_logic();
+                }
             });
             scope.spawn(|_| {
                 self.tui_input_handler.handle_user_input(
@@ -103,5 +107,7 @@ impl<'a> MusicPlayer<'a> {
         .unwrap();
 
         self.tui.restore_terminal();
+
+        error.unwrap();
     }
 }

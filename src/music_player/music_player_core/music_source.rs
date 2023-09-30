@@ -270,4 +270,24 @@ impl RemoteSourceProcessor {
         self.piped_api_domain_index_start = self.piped_api_domain_index;
         Ok(playlist)
     }
+
+    pub fn fetch_piped_api_domains(&mut self) -> Result<(), Error> {
+        let request_url = "https://piped-instances.kavin.rocks/";
+
+        let response: serde_json::Value = reqwest::blocking::get(request_url)?.json()?;
+        let instances = response.as_array().unwrap();
+
+        self.piped_api_domains.clear();
+
+        for instance in instances {
+            let api_url = instance.get("api_url").unwrap();
+            let api_url = api_url.as_str().unwrap();
+
+            self.piped_api_domains.push(api_url.to_string());
+            self.piped_api_domain_index = 0;
+            self.piped_api_domain_index_start = 0;
+        }
+
+        Ok(())
+    }
 }

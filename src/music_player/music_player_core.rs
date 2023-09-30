@@ -1,8 +1,9 @@
-mod music_source;
+pub mod music_source;
 
 use crate::music_player::libmpv_handlers::LibMpvSignals;
 use crate::music_player::music_player_os_interface::OSInterfaceSignals;
 use crate::music_player::tui::{user_input_handler::TuiInputHandlerSignals, TuiSignals};
+use music_source::Error;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::VecDeque;
@@ -84,17 +85,18 @@ impl<'a> MusicPlayerLogic<'a> {
         self.tui_input_handler_send = Some(tui_input_handler_send);
     }
 
-    pub fn process_user_input(&mut self, user_input: &str) {
+    pub fn process_user_input(&mut self, user_input: &str) -> Result<(), Error> {
         if user_input.contains("list=") {
             self.playlist_to_play = music_source::Remote::url_into_playlist_id(user_input).unwrap();
-            self.prepare_playlist();
+            self.prepare_playlist()?;
         } else {
             let music_source = music_source::Source::new_remote(user_input).unwrap();
             self.to_play.push(music_source);
         }
+        Ok(())
     }
 
-    fn prepare_playlist(&mut self) {
+    fn prepare_playlist(&mut self) -> Result<(), Error> {
         let mut to_play = self
             .remote_src_proc
             .playlist_to_remote_vec(&self.playlist_to_play);
@@ -102,7 +104,7 @@ impl<'a> MusicPlayerLogic<'a> {
         while to_play.is_err() {
             let update = self.remote_src_proc.next_piped_api_domains_index();
             if update.is_err() {
-                self.piped_api_domains_error();
+                self.piped_api_domains_error()?;
             }
             to_play = self
                 .remote_src_proc
@@ -114,20 +116,22 @@ impl<'a> MusicPlayerLogic<'a> {
         if self.shuffle_playlist {
             self.to_play.shuffle(&mut thread_rng());
         }
+
+        Ok(())
     }
 
-    pub fn handle_playback_logic(&mut self) {
+    pub fn handle_playback_logic(&mut self) -> Result<(), Error> {
         let os_interface_signal_send = self.os_interface_signal_send.unwrap();
 
-        self.prepare_audio();
-        self.prepare_next_to_play();
+        self.prepare_audio()?;
+        self.prepare_next_to_play()?;
         loop {
             if let Some(recv) = &self.mp_logic_signal_recv {
                 if let Ok(signal) = recv.recv() {
                     match signal {
                         MusicPlayerLogicSignals::PlaybackEnded => {
-                            self.prepare_audio();
-                            self.prepare_next_to_play();
+                            self.prepare_audio()?;
+                            self.prepare_next_to_play()?;
                         }
                         MusicPlayerLogicSignals::End => {
                             os_interface_signal_send
@@ -144,9 +148,10 @@ impl<'a> MusicPlayerLogic<'a> {
                 }
             }
         }
+        Ok(())
     }
 
-    fn prepare_audio(&mut self) {
+    fn prepare_audio(&mut self) -> Result<(), Error> {
         let libmpv_signal_send = self.libmpv_signal_send.unwrap();
         let tui_signal_send = self.tui_signal_send.unwrap();
         let os_interface_signal_send = self.os_interface_signal_send.unwrap();
@@ -165,8 +170,10 @@ impl<'a> MusicPlayerLogic<'a> {
                         {
                             let update = self.remote_src_proc.next_piped_api_domains_index();
                             if update.is_err() {
-                                self.piped_api_domains_error();
-                                return;
+                                self.played_video_ids.pop().unwrap();
+                                self.piped_api_domains_error()?;
+                                self.prepare_audio()?;
+                                return Ok(());
                             }
                         }
                     }
@@ -197,9 +204,11 @@ impl<'a> MusicPlayerLogic<'a> {
             }
             _ => panic!(),
         }
+
+        Ok(())
     }
 
-    fn prepare_next_to_play(&mut self) {
+    fn prepare_next_to_play(&mut self) -> Result<(), Error> {
         let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
         match music_source {
             music_source::Source::Remote(remote_src) => {
@@ -217,7 +226,7 @@ impl<'a> MusicPlayerLogic<'a> {
                     while next_to_play.is_err() {
                         let update = self.remote_src_proc.next_piped_api_domains_index();
                         if update.is_err() {
-                            self.piped_api_domains_error();
+                            self.piped_api_domains_error()?;
                         }
                         next_to_play = self
                             .remote_src_proc
@@ -230,7 +239,7 @@ impl<'a> MusicPlayerLogic<'a> {
                             while self.remote_src_proc.set_audio_url_title(next).is_err() {
                                 let update = self.remote_src_proc.next_piped_api_domains_index();
                                 if update.is_err() {
-                                    self.piped_api_domains_error();
+                                    self.piped_api_domains_error()?;
                                 }
                             }
                         }
@@ -243,25 +252,29 @@ impl<'a> MusicPlayerLogic<'a> {
             _ => panic!(),
         }
         self.to_play_index += 1;
+
+        Ok(())
     }
 
-    fn piped_api_domains_error(&self) {
+    fn piped_api_domains_error(&mut self) -> Result<(), Error> {
         let libmpv_signal_send = self.libmpv_signal_send.unwrap();
         let os_interface_signal_send = self.os_interface_signal_send.unwrap();
         let tui_signal_send = self.tui_signal_send.unwrap();
         let tui_input_handler_send = self.tui_input_handler_send.as_ref().unwrap();
 
-        libmpv_signal_send.send(LibMpvSignals::End).unwrap();
-        tui_signal_send.send(TuiSignals::Quit).unwrap();
-        tui_input_handler_send
-            .send(TuiInputHandlerSignals::Quit)
-            .unwrap();
-        os_interface_signal_send
-            .send(OSInterfaceSignals::End)
-            .unwrap();
+        let result = self.remote_src_proc.fetch_piped_api_domains();
+        if result.is_err() {
+            libmpv_signal_send.send(LibMpvSignals::End).unwrap();
+            tui_signal_send.send(TuiSignals::Quit).unwrap();
+            tui_input_handler_send
+                .send(TuiInputHandlerSignals::Quit)
+                .unwrap();
+            os_interface_signal_send
+                .send(OSInterfaceSignals::End)
+                .unwrap();
+        }
 
-        // Use https://piped-instances.kavin.rocks/
-        unimplemented!();
+        Ok(result?)
     }
 }
 
