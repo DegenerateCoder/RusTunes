@@ -13,6 +13,8 @@ pub enum OSInterfaceSignals {
 pub struct MediaPlayerOSInterface {
     media_controller: souvlaki::MediaControls,
     os_interface_recv: Option<crossbeam::channel::Receiver<OSInterfaceSignals>>,
+    libmpv_signal_send: Option<crossbeam::channel::Sender<LibMpvSignals>>,
+    mp_logic_signal_send: Option<crossbeam::channel::Sender<MusicPlayerLogicSignals>>,
     #[cfg(target_os = "windows")]
     #[allow(dead_code)]
     dummy_window: windows_async::DummyWindow,
@@ -43,6 +45,8 @@ impl MediaPlayerOSInterface {
         MediaPlayerOSInterface {
             media_controller,
             os_interface_recv: None,
+            libmpv_signal_send: None,
+            mp_logic_signal_send: None,
             #[cfg(target_os = "windows")]
             dummy_window,
         }
@@ -80,11 +84,19 @@ impl MediaPlayerOSInterface {
         s
     }
 
-    pub fn handle_signals(
+    pub fn set_senders(
         &mut self,
-        libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
-        mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
+        libmpv_signal_send: crossbeam::channel::Sender<LibMpvSignals>,
+        mp_logic_signal_send: crossbeam::channel::Sender<MusicPlayerLogicSignals>,
     ) {
+        self.libmpv_signal_send = Some(libmpv_signal_send);
+        self.mp_logic_signal_send = Some(mp_logic_signal_send);
+    }
+
+    pub fn handle_signals(&mut self) {
+        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
+        let mp_logic_signal_send = self.mp_logic_signal_send.as_ref().unwrap();
+
         loop {
             if let Some(recv) = &self.os_interface_recv {
                 if let Ok(signal) = recv.recv() {

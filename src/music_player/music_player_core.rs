@@ -14,7 +14,7 @@ pub enum MusicPlayerLogicSignals {
     End,
 }
 
-pub struct MusicPlayerLogic<'a> {
+pub struct MusicPlayerLogic {
     to_play: Vec<music_source::Source>,
     to_play_index: usize,
     playlist_to_play: String,
@@ -23,9 +23,9 @@ pub struct MusicPlayerLogic<'a> {
     related_queue: VecDeque<String>,
     remote_src_proc: music_source::RemoteSourceProcessor,
     mp_logic_signal_recv: Option<crossbeam::channel::Receiver<MusicPlayerLogicSignals>>,
-    libmpv_signal_send: Option<&'a crossbeam::channel::Sender<LibMpvSignals>>,
-    tui_signal_send: Option<&'a crossbeam::channel::Sender<TuiSignals>>,
-    os_interface_signal_send: Option<&'a crossbeam::channel::Sender<OSInterfaceSignals>>,
+    libmpv_signal_send: Option<crossbeam::channel::Sender<LibMpvSignals>>,
+    tui_signal_send: Option<crossbeam::channel::Sender<TuiSignals>>,
+    os_interface_signal_send: Option<crossbeam::channel::Sender<OSInterfaceSignals>>,
     tui_input_handler_send: Option<crossbeam::channel::Sender<TuiInputHandlerSignals>>,
 }
 
@@ -40,7 +40,7 @@ pub struct MusicPlayerConfig {
     video_duration_limit_s: u64,
 }
 
-impl<'a> MusicPlayerLogic<'a> {
+impl MusicPlayerLogic {
     pub fn new(config: MusicPlayerConfig) -> Self {
         MusicPlayerLogic {
             to_play: Vec::new(),
@@ -74,9 +74,9 @@ impl<'a> MusicPlayerLogic<'a> {
 
     pub fn set_signal_senders(
         &mut self,
-        libmpv_signal_send: &'a crossbeam::channel::Sender<LibMpvSignals>,
-        os_interface_signal_send: &'a crossbeam::channel::Sender<OSInterfaceSignals>,
-        tui_signal_send: &'a crossbeam::channel::Sender<TuiSignals>,
+        libmpv_signal_send: crossbeam::channel::Sender<LibMpvSignals>,
+        os_interface_signal_send: crossbeam::channel::Sender<OSInterfaceSignals>,
+        tui_signal_send: crossbeam::channel::Sender<TuiSignals>,
         tui_input_handler_send: crossbeam::channel::Sender<TuiInputHandlerSignals>,
     ) {
         self.libmpv_signal_send = Some(libmpv_signal_send);
@@ -121,13 +121,12 @@ impl<'a> MusicPlayerLogic<'a> {
     }
 
     pub fn handle_playback_logic(&mut self) -> Result<(), Error> {
-        let os_interface_signal_send = self.os_interface_signal_send.unwrap();
-
         self.prepare_audio()?;
         self.prepare_next_to_play()?;
         loop {
             if let Some(recv) = &self.mp_logic_signal_recv {
                 if let Ok(signal) = recv.recv() {
+                    let os_interface_signal_send = self.os_interface_signal_send.as_ref().unwrap();
                     match signal {
                         MusicPlayerLogicSignals::PlaybackEnded => {
                             self.prepare_audio()?;
@@ -152,9 +151,9 @@ impl<'a> MusicPlayerLogic<'a> {
     }
 
     fn prepare_audio(&mut self) -> Result<(), Error> {
-        let libmpv_signal_send = self.libmpv_signal_send.unwrap();
-        let tui_signal_send = self.tui_signal_send.unwrap();
-        let os_interface_signal_send = self.os_interface_signal_send.unwrap();
+        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
+        let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
+        let os_interface_signal_send = self.os_interface_signal_send.as_ref().unwrap();
 
         let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
         match music_source {
@@ -257,9 +256,9 @@ impl<'a> MusicPlayerLogic<'a> {
     }
 
     fn piped_api_domains_error(&mut self) -> Result<(), Error> {
-        let libmpv_signal_send = self.libmpv_signal_send.unwrap();
-        let os_interface_signal_send = self.os_interface_signal_send.unwrap();
-        let tui_signal_send = self.tui_signal_send.unwrap();
+        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
+        let os_interface_signal_send = self.os_interface_signal_send.as_ref().unwrap();
+        let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
         let tui_input_handler_send = self.tui_input_handler_send.as_ref().unwrap();
 
         let result = self.remote_src_proc.fetch_piped_api_domains();

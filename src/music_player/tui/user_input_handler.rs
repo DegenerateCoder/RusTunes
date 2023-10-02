@@ -14,6 +14,9 @@ pub struct TUIUserInputHandler {
     volume: i64,
     commands: TuiCommands,
     tui_input_handler_signal_recv: Option<crossbeam::channel::Receiver<TuiInputHandlerSignals>>,
+    libmpv_signal_send: Option<crossbeam::channel::Sender<LibMpvSignals>>,
+    tui_signal_send: Option<crossbeam::channel::Sender<TuiSignals>>,
+    mp_logic_signal_send: Option<crossbeam::channel::Sender<MusicPlayerLogicSignals>>,
 }
 
 impl TUIUserInputHandler {
@@ -23,6 +26,9 @@ impl TUIUserInputHandler {
             volume,
             commands: TuiCommands::new(),
             tui_input_handler_signal_recv: None,
+            libmpv_signal_send: None,
+            tui_signal_send: None,
+            mp_logic_signal_send: None,
         }
     }
 
@@ -34,24 +40,25 @@ impl TUIUserInputHandler {
         s
     }
 
-    pub fn handle_user_input(
+    pub fn set_senders(
         &mut self,
-        libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
-        tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
-        mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
+        libmpv_signal_send: crossbeam::channel::Sender<LibMpvSignals>,
+        tui_signal_send: crossbeam::channel::Sender<TuiSignals>,
+        mp_logic_signal_send: crossbeam::channel::Sender<MusicPlayerLogicSignals>,
     ) {
+        self.libmpv_signal_send = Some(libmpv_signal_send);
+        self.tui_signal_send = Some(tui_signal_send);
+        self.mp_logic_signal_send = Some(mp_logic_signal_send);
+    }
+
+    pub fn handle_user_input(&mut self) {
         loop {
             if event::poll(std::time::Duration::from_millis(100)).unwrap() {
                 let event = event::read();
                 if let Ok(event) = event {
                     match event {
                         event::Event::Key(key) => {
-                            if self.handle_key_event(
-                                key,
-                                libmpv_signal_send,
-                                tui_signal_send,
-                                mp_logic_signal_send,
-                            ) {
+                            if self.handle_key_event(key) {
                                 break;
                             }
                         }
@@ -72,13 +79,11 @@ impl TUIUserInputHandler {
         }
     }
 
-    fn handle_key_event(
-        &mut self,
-        key: crossterm::event::KeyEvent,
-        libmpv_signal_send: &crossbeam::channel::Sender<LibMpvSignals>,
-        tui_signal_send: &crossbeam::channel::Sender<TuiSignals>,
-        mp_logic_signal_send: &crossbeam::channel::Sender<MusicPlayerLogicSignals>,
-    ) -> bool {
+    fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) -> bool {
+        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
+        let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
+        let mp_logic_signal_send = self.mp_logic_signal_send.as_ref().unwrap();
+
         let action = self
             .commands
             .map_keycode_to_action(key.code, &self.tui_state);
@@ -106,8 +111,7 @@ impl TUIUserInputHandler {
                     libmpv_signal_send.send(LibMpvSignals::PauseResume).unwrap();
                 }
                 Action::Vol(vol) => {
-                    self.update_volume(vol);
-
+                    self.volume = Self::get_updated_volume(self.volume, vol);
                     tui_signal_send
                         .send(TuiSignals::UpdateVolume(self.volume))
                         .unwrap();
@@ -134,12 +138,14 @@ impl TUIUserInputHandler {
         false
     }
 
-    fn update_volume(&mut self, change: i64) {
-        self.volume += change;
-        if self.volume > 100 {
-            self.volume = 100;
-        } else if self.volume < 0 {
-            self.volume = 0;
+    fn get_updated_volume(current_volume: i64, change: i64) -> i64 {
+        let volume = current_volume + change;
+        if volume > 100 {
+            100
+        } else if volume < 0 {
+            0
+        } else {
+            volume
         }
     }
 }
