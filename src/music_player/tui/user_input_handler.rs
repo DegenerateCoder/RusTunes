@@ -1,10 +1,12 @@
 use crate::music_player::libmpv_handlers::LibMpvSignals;
+use crate::music_player::logger;
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 use crate::music_player::tui::commands::{Action, TuiCommands};
 use crate::music_player::tui::TuiSignals;
 use crate::music_player::tui::TuiState;
 use crossterm::event;
 
+#[derive(Debug)]
 pub enum TuiInputHandlerSignals {
     Quit,
 }
@@ -17,10 +19,11 @@ pub struct TUIUserInputHandler {
     libmpv_signal_send: Option<crossbeam::channel::Sender<LibMpvSignals>>,
     tui_signal_send: Option<crossbeam::channel::Sender<TuiSignals>>,
     mp_logic_signal_send: Option<crossbeam::channel::Sender<MusicPlayerLogicSignals>>,
+    log_send: logger::LogSender,
 }
 
 impl TUIUserInputHandler {
-    pub fn new(volume: i64) -> Self {
+    pub fn new(volume: i64, log_send: logger::LogSender) -> Self {
         Self {
             tui_state: TuiState::Player,
             volume,
@@ -29,6 +32,7 @@ impl TUIUserInputHandler {
             libmpv_signal_send: None,
             tui_signal_send: None,
             mp_logic_signal_send: None,
+            log_send,
         }
     }
 
@@ -68,6 +72,10 @@ impl TUIUserInputHandler {
             } else {
                 if let Some(recv) = &self.tui_input_handler_signal_recv {
                     if let Ok(signal) = recv.try_recv() {
+                        self.log_send.send_log_message(format!(
+                            "TUIUserInputHandler::handle_user_input -> {:?}",
+                            signal
+                        ));
                         match signal {
                             TuiInputHandlerSignals::Quit => {
                                 break;
@@ -89,6 +97,10 @@ impl TUIUserInputHandler {
             .map_keycode_to_action(key.code, &self.tui_state);
 
         if let Some(action) = action {
+            self.log_send.send_log_message(format!(
+                "TUIUserInputHandler::handle_key_event -> {:?}",
+                action
+            ));
             match action {
                 Action::Quit => {
                     libmpv_signal_send.send(LibMpvSignals::End).unwrap();

@@ -7,7 +7,7 @@ pub struct Command {
     pub action: Action,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Action {
     ViewPlayer,
     ViewHistory,

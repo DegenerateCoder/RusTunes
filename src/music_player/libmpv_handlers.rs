@@ -1,6 +1,8 @@
+use crate::music_player::logger::LogSender;
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 use crate::music_player::tui::TuiSignals;
 
+#[derive(Debug)]
 pub enum LibMpvSignals {
     PlayAudio(String),
     PlayNext,
@@ -13,10 +15,11 @@ pub enum LibMpvSignals {
 pub struct LibMpvHandler {
     mpv: libmpv::Mpv,
     libmpv_signal_recv: Option<crossbeam::channel::Receiver<LibMpvSignals>>,
+    log_send: LogSender,
 }
 
 impl LibMpvHandler {
-    pub fn initialize_libmpv(volume: i64) -> Result<Self, libmpv::Error> {
+    pub fn initialize_libmpv(volume: i64, log_send: LogSender) -> Result<Self, libmpv::Error> {
         let mpv = libmpv::Mpv::new()?;
         mpv.set_property("volume", volume)?;
         mpv.set_property("vo", "null")?;
@@ -26,6 +29,7 @@ impl LibMpvHandler {
         Ok(LibMpvHandler {
             mpv,
             libmpv_signal_recv,
+            log_send,
         })
     }
 
@@ -52,6 +56,8 @@ impl LibMpvHandler {
         loop {
             if let Some(recv) = &self.libmpv_signal_recv {
                 if let Ok(signal) = recv.recv() {
+                    self.log_send
+                        .send_log_message(format!("LibMpvHandler::handle_signals -> {:?}", signal));
                     match signal {
                         LibMpvSignals::PlayAudio(source) => {
                             self.mpv
@@ -90,70 +96,95 @@ impl LibMpvHandler {
 pub struct EventHandler {
     mp_logic_signal_send: crossbeam::channel::Sender<MusicPlayerLogicSignals>,
     tui_signal_send: crossbeam::channel::Sender<TuiSignals>,
+    log_send: LogSender,
 }
 
 impl EventHandler {
     pub fn new(
         mp_logic_signal_send: crossbeam::channel::Sender<MusicPlayerLogicSignals>,
         tui_signal_send: crossbeam::channel::Sender<TuiSignals>,
+        log_send: LogSender,
     ) -> Self {
         Self {
             mp_logic_signal_send,
             tui_signal_send,
+            log_send,
         }
     }
 
     pub fn libmpv_event_handling(&self, mut ev_ctx: libmpv::events::EventContext) {
-        let mp_logic_signal_send = &self.mp_logic_signal_send;
-        let tui_signal_send = &self.tui_signal_send;
-
         loop {
             let ev = ev_ctx.wait_event(600.).unwrap_or(Err(libmpv::Error::Null));
 
             match ev {
-                Ok(libmpv::events::Event::EndFile(_r)) => {
-                    tui_signal_send.send(TuiSignals::End).unwrap();
-                    mp_logic_signal_send
-                        .send(MusicPlayerLogicSignals::PlaybackEnded)
-                        .unwrap();
-                }
-                Ok(libmpv::events::Event::PropertyChange {
-                    name: "pause",
-                    change: libmpv::events::PropertyData::Flag(pause),
-                    ..
-                }) => {
-                    if pause {
-                        tui_signal_send.send(TuiSignals::PlaybackPause).unwrap();
-                    } else {
-                        tui_signal_send.send(TuiSignals::PlaybackResume).unwrap();
+                Ok(event) => {
+                    self.log_send.send_log_message(format!(
+                        "EventHandler::libmpv_event_handling -> {:?}",
+                        event
+                    ));
+                    let end = self.handle_event(event);
+                    if end {
+                        break;
                     }
                 }
-
-                Ok(libmpv::events::Event::PropertyChange {
-                    name: "demuxer-cache-state",
-                    change: libmpv::events::PropertyData::Node(_mpv_node),
-                    ..
-                }) => {
-                    //let ranges = seekable_ranges(mpv_node).unwrap();
-                    //println!("Seekable ranges updated: {:?}", ranges);
+                Err(e) => {
+                    self.log_send.send_log_message(format!(
+                        "EventHandler::libmpv_event_handling -> {:?}",
+                        e
+                    ));
                 }
-                Ok(libmpv::events::Event::StartFile) => {
-                    tui_signal_send.send(TuiSignals::Start).unwrap();
-                }
-                Ok(libmpv::events::Event::PlaybackRestart) => {
-                    tui_signal_send.send(TuiSignals::AudioReady).unwrap();
-                }
-                Ok(libmpv::events::Event::Shutdown) => {
-                    mp_logic_signal_send
-                        .send(MusicPlayerLogicSignals::End)
-                        .unwrap();
-                    break;
-                }
-                Ok(_e) => {
-                    //println!("Event triggered: {:?}", e);
-                }
-                Err(_e) => (), // println!("Event errored: {:?}", _e),
             }
         }
+    }
+
+    fn handle_event(&self, event: libmpv::events::Event) -> bool {
+        match event {
+            libmpv::events::Event::EndFile(_r) => {
+                self.tui_signal_send.send(TuiSignals::End).unwrap();
+                self.mp_logic_signal_send
+                    .send(MusicPlayerLogicSignals::PlaybackEnded)
+                    .unwrap();
+            }
+            libmpv::events::Event::PropertyChange {
+                name: "pause",
+                change: libmpv::events::PropertyData::Flag(pause),
+                ..
+            } => {
+                if pause {
+                    self.tui_signal_send
+                        .send(TuiSignals::PlaybackPause)
+                        .unwrap();
+                } else {
+                    self.tui_signal_send
+                        .send(TuiSignals::PlaybackResume)
+                        .unwrap();
+                }
+            }
+
+            libmpv::events::Event::PropertyChange {
+                name: "demuxer-cache-state",
+                change: libmpv::events::PropertyData::Node(_mpv_node),
+                ..
+            } => {
+                //let ranges = seekable_ranges(mpv_node).unwrap();
+                //println!("Seekable ranges updated: {:?}", ranges);
+            }
+            libmpv::events::Event::StartFile => {
+                self.tui_signal_send.send(TuiSignals::Start).unwrap();
+            }
+            libmpv::events::Event::PlaybackRestart => {
+                self.tui_signal_send.send(TuiSignals::AudioReady).unwrap();
+            }
+            libmpv::events::Event::Shutdown => {
+                self.mp_logic_signal_send
+                    .send(MusicPlayerLogicSignals::End)
+                    .unwrap();
+                self.log_send.send_quit_signal();
+                return true;
+            }
+            _e => (),
+        }
+
+        false
     }
 }

@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod user_input_handler;
 
+use crate::music_player::logger;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
@@ -12,6 +13,7 @@ use ratatui::{
     Terminal,
 };
 
+#[derive(Debug)]
 pub enum TuiSignals {
     Start,
     AudioReady,
@@ -26,7 +28,7 @@ pub enum TuiSignals {
     Quit,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub enum TuiState {
     Player,
     History,
@@ -37,10 +39,11 @@ pub struct MusicPlayerTUI {
     tui_signal_recv: Option<crossbeam::channel::Receiver<TuiSignals>>,
     tui_state: TuiState,
     volume: i64,
+    log_send: logger::LogSender,
 }
 
 impl MusicPlayerTUI {
-    pub fn setup_terminal(volume: i64) -> Self {
+    pub fn setup_terminal(volume: i64, log_send: logger::LogSender) -> Self {
         enable_raw_mode().unwrap();
         let mut stdout = std::io::stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
@@ -52,6 +55,7 @@ impl MusicPlayerTUI {
             tui_signal_recv: None,
             tui_state: TuiState::Player,
             volume,
+            log_send,
         }
     }
 
@@ -103,6 +107,10 @@ impl MusicPlayerTUI {
             std::thread::sleep(std::time::Duration::from_millis(100));
             if let Some(recv) = &self.tui_signal_recv {
                 if let Ok(signal) = recv.try_recv() {
+                    self.log_send.send_log_message(format!(
+                        "MusicPlayerTUI::handle_signals -> {:?}",
+                        signal
+                    ));
                     match signal {
                         TuiSignals::Start => audio_ready = false,
                         TuiSignals::AudioReady => {

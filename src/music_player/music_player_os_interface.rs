@@ -1,6 +1,8 @@
 use crate::music_player::libmpv_handlers::LibMpvSignals;
+use crate::music_player::logger;
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 
+#[derive(Debug)]
 pub enum OSInterfaceSignals {
     Pause,
     Resume,
@@ -15,13 +17,14 @@ pub struct MediaPlayerOSInterface {
     os_interface_recv: Option<crossbeam::channel::Receiver<OSInterfaceSignals>>,
     libmpv_signal_send: Option<crossbeam::channel::Sender<LibMpvSignals>>,
     mp_logic_signal_send: Option<crossbeam::channel::Sender<MusicPlayerLogicSignals>>,
+    log_send: logger::LogSender,
     #[cfg(target_os = "windows")]
     #[allow(dead_code)]
     dummy_window: windows_async::DummyWindow,
 }
 
 impl MediaPlayerOSInterface {
-    pub fn new() -> Self {
+    pub fn new(log_send: logger::LogSender) -> Self {
         #[cfg(not(target_os = "windows"))]
         let hwnd = None;
 
@@ -49,6 +52,7 @@ impl MediaPlayerOSInterface {
             mp_logic_signal_send: None,
             #[cfg(target_os = "windows")]
             dummy_window,
+            log_send,
         }
     }
 
@@ -100,6 +104,10 @@ impl MediaPlayerOSInterface {
         loop {
             if let Some(recv) = &self.os_interface_recv {
                 if let Ok(signal) = recv.recv() {
+                    self.log_send.send_log_message(format!(
+                        "MediaPlayerOSInterface::handle_signals  -> {:?}",
+                        signal
+                    ));
                     match signal {
                         OSInterfaceSignals::Resume => {
                             libmpv_signal_send.send(LibMpvSignals::PauseResume).unwrap();

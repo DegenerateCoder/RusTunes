@@ -1,4 +1,5 @@
 use crate::music_player::libmpv_handlers::LibMpvSignals;
+use crate::music_player::logger;
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 
 #[allow(dead_code)]
@@ -18,7 +19,7 @@ pub struct MediaPlayerOSInterface {
 }
 
 impl MediaPlayerOSInterface {
-    pub fn new() -> Self {
+    pub fn new(_log_send: logger::LogSender) -> Self {
         MediaPlayerOSInterface {
             os_interface_recv: None,
             libmpv_signal_send: None,
@@ -44,7 +45,6 @@ impl MediaPlayerOSInterface {
     }
 
     pub fn handle_signals(&mut self) {
-        println!("AAAA");
         loop {
             if let Some(recv) = &self.os_interface_recv {
                 if let Ok(signal) = recv.recv() {

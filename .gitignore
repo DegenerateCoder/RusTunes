@@ -19,3 +19,6 @@ mpv.lib
 
 # Config
 conf.json
+
+# Debug log
+log.txt

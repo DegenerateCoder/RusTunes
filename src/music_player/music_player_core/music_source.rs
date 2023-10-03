@@ -1,3 +1,5 @@
+use crate::music_player::logger::{Error, LogSender};
+
 pub struct RemoteSourceProcessor {
     piped_api_domains: Vec<String>,
     piped_api_domain_index: usize,
@@ -5,9 +7,10 @@ pub struct RemoteSourceProcessor {
     invidious_api_domain_index: usize,
     duration_limit: u64,
     piped_api_domain_index_start: usize,
+    log_send: LogSender,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Remote {
     pub url: String,
     pub video_id: String,
@@ -16,28 +19,13 @@ pub struct Remote {
     pub length: u64,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Local {}
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Source {
     Remote(Remote),
     _Local(Local),
-}
-
-#[derive(Debug)]
-pub enum Error {
-    InvalidVideoUrl(String),
-    InvalidPlaylistUrl(String),
-    ReqwestError(reqwest::Error),
-    NoRelatedVideoFound(String),
-    AllPipedApiDomainsDown(String),
-}
-
-impl From<reqwest::Error> for Error {
-    fn from(err: reqwest::Error) -> Self {
-        Error::ReqwestError(err)
-    }
 }
 
 impl Source {
@@ -91,6 +79,7 @@ impl RemoteSourceProcessor {
         invidious_api_domains: Vec<String>,
         invidious_api_domain_index: usize,
         duration_limit: u64,
+        log_send: crate::music_player::logger::LogSender,
     ) -> Self {
         Self {
             piped_api_domains,
@@ -99,6 +88,7 @@ impl RemoteSourceProcessor {
             invidious_api_domain_index,
             duration_limit,
             piped_api_domain_index_start: piped_api_domain_index,
+            log_send,
         }
     }
 
@@ -113,6 +103,10 @@ impl RemoteSourceProcessor {
                 "All piped api domains are unrechable".to_string(),
             ))
         } else {
+            self.log_send.send_log_message(format!(
+                "RemoteSourceProcessor::next_piped_api_domains_index -> {:?}",
+                self.get_piped_api_domain()
+            ));
             self.piped_api_domain_index = i;
             Ok(())
         }
@@ -287,6 +281,11 @@ impl RemoteSourceProcessor {
             self.piped_api_domain_index = 0;
             self.piped_api_domain_index_start = 0;
         }
+
+        self.log_send.send_log_message(format!(
+            "RemoteSourceProcessor::fetch_piped_api_domains -> {:?}",
+            self.get_piped_api_domain()
+        ));
 
         Ok(())
     }
