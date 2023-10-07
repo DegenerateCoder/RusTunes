@@ -121,6 +121,19 @@ impl RemoteSourceProcessor {
     }
 
     pub fn set_audio_url_title(&mut self, source: &mut Remote) -> Result<(), Error> {
+        let result = self._set_audio_url_title(source);
+
+        if result.is_err() {
+            self.log_send.send_log_message(format!(
+                "RemoteSourceProcessor::->set_audio_url_title {:?}",
+                result
+            ));
+        }
+
+        Ok(result?)
+    }
+
+    pub fn _set_audio_url_title(&mut self, source: &mut Remote) -> Result<(), Error> {
         let request_url = format!(
             "{}/streams/{}",
             self.get_piped_api_domain(),
@@ -147,6 +160,19 @@ impl RemoteSourceProcessor {
     }
 
     pub fn get_video_genre(&self, source: &Remote) -> Result<String, Error> {
+        let result = self._get_video_genre(source);
+
+        if result.is_err() {
+            self.log_send.send_log_message(format!(
+                "RemoteSourceProcessor::->get_video_genre {:?}",
+                result
+            ));
+        }
+
+        Ok(result?)
+    }
+
+    pub fn _get_video_genre(&self, source: &Remote) -> Result<String, Error> {
         let request_url = format!(
             "{}/api/v1/videos/{}",
             self.get_invidious_api_domains(),
@@ -163,13 +189,29 @@ impl RemoteSourceProcessor {
         video_id: &str,
         played_video_ids: &Vec<String>,
     ) -> Result<Source, Error> {
+        let result = self._get_related_video_url(video_id, played_video_ids);
+
+        if result.is_err() {
+            self.log_send.send_log_message(format!(
+                "RemoteSourceProcessor::get_related_video_url -> {:?}",
+                result
+            ));
+        }
+
+        Ok(result?)
+    }
+
+    fn _get_related_video_url(
+        &mut self,
+        video_id: &str,
+        played_video_ids: &Vec<String>,
+    ) -> Result<Source, Error> {
         let request_url = format!("{}/streams/{}", self.get_piped_api_domain(), video_id);
-        let mut response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
-        let related_streams: &mut Vec<serde_json::Value> = response
-            .get_mut("relatedStreams")
-            .unwrap()
-            .as_array_mut()
-            .unwrap();
+        let response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
+        let related_streams = response
+            .get("relatedStreams")
+            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+        let related_streams: &Vec<serde_json::Value> = related_streams.as_array().unwrap();
 
         for related_stream in related_streams {
             let related_video_url = related_stream.get("url").unwrap();
@@ -220,6 +262,19 @@ impl RemoteSourceProcessor {
     }
 
     pub fn playlist_to_remote_vec(&mut self, playlist_id: &str) -> Result<Vec<Source>, Error> {
+        let result = self._playlist_to_remote_vec(playlist_id);
+
+        if result.is_err() {
+            self.log_send.send_log_message(format!(
+                "RemoteSourceProcessor::playlist_to_remote_vec -> {:?}",
+                result
+            ));
+        }
+
+        Ok(result?)
+    }
+
+    pub fn _playlist_to_remote_vec(&mut self, playlist_id: &str) -> Result<Vec<Source>, Error> {
         let mut playlist = Vec::new();
         let request_url = format!("{}/playlists/{}", self.get_piped_api_domain(), playlist_id);
 
@@ -266,6 +321,19 @@ impl RemoteSourceProcessor {
     }
 
     pub fn fetch_piped_api_domains(&mut self) -> Result<(), Error> {
+        let result = self._fetch_piped_api_domains();
+
+        if result.is_err() {
+            self.log_send.send_log_message(format!(
+                "RemoteSourceProcessor::playlist_id -> {:?}",
+                result
+            ));
+        }
+
+        Ok(result?)
+    }
+
+    pub fn _fetch_piped_api_domains(&mut self) -> Result<(), Error> {
         let request_url = "https://piped-instances.kavin.rocks/";
 
         let response: serde_json::Value = reqwest::blocking::get(request_url)?.json()?;

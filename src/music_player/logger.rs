@@ -8,6 +8,7 @@ pub enum Error {
     NoRelatedVideoFound(String),
     AllPipedApiDomainsDown(String),
     StdIOError(std::io::Error),
+    OtherError(String),
 }
 
 impl From<reqwest::Error> for Error {
