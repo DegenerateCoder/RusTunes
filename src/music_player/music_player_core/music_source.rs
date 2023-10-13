@@ -140,11 +140,16 @@ impl RemoteSourceProcessor {
             &source.video_id
         );
         let mut response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
+
+        let _test_audio_streams = response
+            .get("audioStreams")
+            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
         let audio_streams: &mut Vec<serde_json::Value> = response
             .get_mut("audioStreams")
             .unwrap()
             .as_array_mut()
             .unwrap();
+
         audio_streams.sort_by_key(|x| x.get("bitrate").unwrap().as_u64().unwrap());
         let audio_stream = audio_streams.last().unwrap();
         let music_url = audio_stream.get("url").unwrap();
@@ -179,7 +184,11 @@ impl RemoteSourceProcessor {
             &source.video_id
         );
         let response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
-        let genre: String = response.get("genre").unwrap().as_str().unwrap().to_string();
+
+        let genre = response
+            .get("genre")
+            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+        let genre = genre.as_str().unwrap().to_string();
 
         Ok(genre)
     }
@@ -281,11 +290,10 @@ impl RemoteSourceProcessor {
         let mut response: serde_json::Value = reqwest::blocking::get(&request_url)?.json()?;
 
         loop {
-            let related_streams: &mut Vec<serde_json::Value> = response
-                .get_mut("relatedStreams")
-                .unwrap()
-                .as_array_mut()
-                .unwrap();
+            let related_streams = response
+                .get("relatedStreams")
+                .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+            let related_streams: &Vec<serde_json::Value> = related_streams.as_array().unwrap();
 
             for stream in related_streams {
                 let url = stream.get("url").unwrap().as_str().unwrap().to_string();
@@ -337,12 +345,16 @@ impl RemoteSourceProcessor {
         let request_url = "https://piped-instances.kavin.rocks/";
 
         let response: serde_json::Value = reqwest::blocking::get(request_url)?.json()?;
-        let instances = response.as_array().unwrap();
+        let instances = response
+            .as_array()
+            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
 
         self.piped_api_domains.clear();
 
         for instance in instances {
-            let api_url = instance.get("api_url").unwrap();
+            let api_url = instance
+                .get("api_url")
+                .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
             let api_url = api_url.as_str().unwrap();
 
             self.piped_api_domains.push(api_url.to_string());
