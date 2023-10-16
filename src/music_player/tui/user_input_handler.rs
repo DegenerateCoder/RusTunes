@@ -1,7 +1,7 @@
 use crate::music_player::libmpv_handlers::LibMpvSignals;
 use crate::music_player::logger;
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
-use crate::music_player::tui::commands::{Action, TuiCommands};
+use crate::music_player::tui::commands::{commands_registry::Action, TuiCommands};
 use crate::music_player::tui::TuiSignals;
 use crate::music_player::tui::TuiState;
 use crossterm::event;
@@ -107,17 +107,11 @@ impl TUIUserInputHandler {
                     tui_signal_send.send(TuiSignals::Quit).unwrap();
                     return true;
                 }
-                Action::ViewPlayer => {
+                Action::View(tui_state) => {
                     tui_signal_send
-                        .send(TuiSignals::UpdateState(TuiState::Player))
+                        .send(TuiSignals::UpdateState(tui_state.clone()))
                         .unwrap();
-                    self.tui_state = TuiState::Player;
-                }
-                Action::ViewHistory => {
-                    tui_signal_send
-                        .send(TuiSignals::UpdateState(TuiState::History))
-                        .unwrap();
-                    self.tui_state = TuiState::History;
+                    self.tui_state = tui_state;
                 }
                 Action::PlayerPauseResume => {
                     libmpv_signal_send.send(LibMpvSignals::PauseResume).unwrap();

@@ -28,7 +28,7 @@ pub enum TuiSignals {
     Quit,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub enum TuiState {
     Player,
     History,
