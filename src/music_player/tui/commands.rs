@@ -27,6 +27,25 @@ impl TuiCommands {
         }
     }
 
+    pub fn map_command_text_to_action(
+        &self,
+        command_text: &str,
+        tui_state: &TuiState,
+    ) -> Option<Action> {
+        let mut action = self.global_commands.map_command_str_to_action(command_text);
+
+        if action.is_none() {
+            action = match tui_state {
+                TuiState::Player => None,
+                TuiState::History => self
+                    .history_state_commands
+                    .map_command_str_to_action(command_text),
+            };
+        }
+
+        action
+    }
+
     pub fn map_keycode_to_action(&self, key: KeyCode, tui_state: &TuiState) -> Option<Action> {
         let mut global_command = true;
         let command_with_args = self.global_commands_keys.get(&key).or_else(|| {
@@ -53,6 +72,11 @@ impl TuiCommands {
     fn init_global_commands() -> CommandsRegistry {
         let mut global_commands = CommandsRegistry::new();
         global_commands.add_commands([
+            CommandDefinition {
+                name: "enter_command_mode".to_string(),
+                action_type: CommandType::EnterCommandMode,
+                args: vec![],
+            },
             CommandDefinition {
                 name: "view".to_string(),
                 action_type: CommandType::View,
@@ -90,6 +114,7 @@ impl TuiCommands {
 
     fn init_global_commands_keys() -> HashMap<KeyCode, String> {
         HashMap::from([
+            (KeyCode::Char(':'), "enter_command_mode".to_string()),
             (KeyCode::Char('1'), "view player".to_string()),
             (KeyCode::Char('2'), "view history".to_string()),
             (KeyCode::Char('q'), "quit".to_string()),

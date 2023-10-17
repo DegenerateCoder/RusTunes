@@ -13,6 +13,8 @@ pub enum TuiInputHandlerSignals {
 
 pub struct TUIUserInputHandler {
     tui_state: TuiState,
+    enter_command_mode: bool,
+    command_text: String,
     volume: i64,
     commands: TuiCommands,
     tui_input_handler_signal_recv: Option<crossbeam::channel::Receiver<TuiInputHandlerSignals>>,
@@ -26,6 +28,8 @@ impl TUIUserInputHandler {
     pub fn new(volume: i64, log_send: logger::LogSender) -> Self {
         Self {
             tui_state: TuiState::Player,
+            enter_command_mode: false,
+            command_text: "".to_string(),
             volume,
             commands: TuiCommands::new(),
             tui_input_handler_signal_recv: None,
@@ -62,8 +66,14 @@ impl TUIUserInputHandler {
                 if let Ok(event) = event {
                     match event {
                         event::Event::Key(key) => {
-                            if self.handle_key_event(key) {
-                                break;
+                            if !self.enter_command_mode {
+                                if self.handle_key_event(key) {
+                                    break;
+                                }
+                            } else {
+                                if self.handle_key_event_command(key) {
+                                    break;
+                                }
                             }
                         }
                         _ => (),
@@ -87,60 +97,106 @@ impl TUIUserInputHandler {
         }
     }
 
-    fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) -> bool {
-        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
+    fn handle_key_event_command(&mut self, key: crossterm::event::KeyEvent) -> bool {
         let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
-        let mp_logic_signal_send = self.mp_logic_signal_send.as_ref().unwrap();
+        match key.code {
+            crossterm::event::KeyCode::Enter => {
+                self.enter_command_mode = false;
+                tui_signal_send
+                    .send(TuiSignals::EnterCommandMode(false))
+                    .unwrap();
 
+                let action = self
+                    .commands
+                    .map_command_text_to_action(&self.command_text, &self.tui_state);
+                self.command_text = "".to_owned();
+
+                if let Some(action) = action {
+                    return self.handle_action(action);
+                }
+            }
+            crossterm::event::KeyCode::Char(c) => {
+                self.command_text.push(c);
+                tui_signal_send
+                    .send(TuiSignals::UpdateCommandText(c))
+                    .unwrap();
+            }
+            crossterm::event::KeyCode::Backspace => {
+                self.command_text.pop();
+                tui_signal_send
+                    .send(TuiSignals::UpdateCommandTextBackspace)
+                    .unwrap();
+            }
+            _ => (),
+        }
+        false
+    }
+
+    fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) -> bool {
         let action = self
             .commands
             .map_keycode_to_action(key.code, &self.tui_state);
 
         if let Some(action) = action {
-            self.log_send.send_log_message(format!(
-                "TUIUserInputHandler::handle_key_event -> {:?}",
-                action
-            ));
-            match action {
-                Action::Quit => {
-                    libmpv_signal_send.send(LibMpvSignals::End).unwrap();
-                    tui_signal_send.send(TuiSignals::Quit).unwrap();
-                    return true;
-                }
-                Action::View(tui_state) => {
-                    tui_signal_send
-                        .send(TuiSignals::UpdateState(tui_state.clone()))
-                        .unwrap();
-                    self.tui_state = tui_state;
-                }
-                Action::PlayerPauseResume => {
-                    libmpv_signal_send.send(LibMpvSignals::PauseResume).unwrap();
-                }
-                Action::Vol(vol) => {
-                    self.volume = Self::get_updated_volume(self.volume, vol);
-                    tui_signal_send
-                        .send(TuiSignals::UpdateVolume(self.volume))
-                        .unwrap();
+            return self.handle_action(action);
+        }
+        false
+    }
 
-                    libmpv_signal_send
-                        .send(LibMpvSignals::SetVolume(self.volume))
-                        .unwrap();
-                }
-                Action::PlayerNext => {
-                    libmpv_signal_send.send(LibMpvSignals::PlayNext).unwrap();
-                }
-                Action::PlayerPrev => {
-                    mp_logic_signal_send
-                        .send(MusicPlayerLogicSignals::PlayPrev)
-                        .unwrap();
-                    libmpv_signal_send.send(LibMpvSignals::PlayPrev).unwrap();
-                }
-                Action::Scroll(y) => {
-                    tui_signal_send.send(TuiSignals::ModifyScroll(y)).unwrap();
-                }
+    fn handle_action(&mut self, action: Action) -> bool {
+        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
+        let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
+        let mp_logic_signal_send = self.mp_logic_signal_send.as_ref().unwrap();
+
+        self.log_send.send_log_message(format!(
+            "TUIUserInputHandler::handle_key_event -> {:?}",
+            action
+        ));
+        match action {
+            Action::Quit => {
+                libmpv_signal_send.send(LibMpvSignals::End).unwrap();
+                tui_signal_send.send(TuiSignals::Quit).unwrap();
+                return true;
+            }
+            Action::View(tui_state) => {
+                tui_signal_send
+                    .send(TuiSignals::UpdateState(tui_state.clone()))
+                    .unwrap();
+                self.tui_state = tui_state;
+            }
+            Action::PlayerPauseResume => {
+                libmpv_signal_send.send(LibMpvSignals::PauseResume).unwrap();
+            }
+            Action::Vol(vol) => {
+                self.volume = Self::get_updated_volume(self.volume, vol);
+                tui_signal_send
+                    .send(TuiSignals::UpdateVolume(self.volume))
+                    .unwrap();
+
+                libmpv_signal_send
+                    .send(LibMpvSignals::SetVolume(self.volume))
+                    .unwrap();
+            }
+            Action::PlayerNext => {
+                libmpv_signal_send.send(LibMpvSignals::PlayNext).unwrap();
+            }
+            Action::PlayerPrev => {
+                mp_logic_signal_send
+                    .send(MusicPlayerLogicSignals::PlayPrev)
+                    .unwrap();
+                libmpv_signal_send.send(LibMpvSignals::PlayPrev).unwrap();
+            }
+            Action::Scroll(y) => {
+                tui_signal_send.send(TuiSignals::ModifyScroll(y)).unwrap();
+            }
+            Action::EnterCommandMode => {
+                self.command_text = "".to_string();
+                self.enter_command_mode = true;
+                tui_signal_send
+                    .send(TuiSignals::EnterCommandMode(true))
+                    .unwrap();
             }
         }
-
         false
     }
 

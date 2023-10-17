@@ -91,6 +91,7 @@ impl CommandsRegistry {
         }
 
         let action_with_args = match action {
+            CommandType::EnterCommandMode => Action::EnterCommandMode,
             CommandType::View => Action::View(processed_args.pop()?.extract_tui_state()?),
             CommandType::Quit => Action::Quit,
             CommandType::PlayerPauseResume => Action::PlayerPauseResume,
@@ -115,6 +116,7 @@ impl CommandsRegistry {
 
 #[derive(Debug)]
 pub enum CommandType {
+    EnterCommandMode,
     View,
     Quit,
     PlayerPauseResume,
@@ -126,6 +128,7 @@ pub enum CommandType {
 
 #[derive(Debug)]
 pub enum Action {
+    EnterCommandMode,
     View(TuiState),
     Quit,
     PlayerPauseResume,

@@ -15,6 +15,9 @@ use ratatui::{
 
 #[derive(Debug)]
 pub enum TuiSignals {
+    EnterCommandMode(bool),
+    UpdateCommandText(char),
+    UpdateCommandTextBackspace,
     Start,
     AudioReady,
     End,
@@ -78,7 +81,7 @@ impl MusicPlayerTUI {
         self.terminal.show_cursor().unwrap();
     }
 
-    pub fn draw(&mut self, text: &str, scroll: u16) {
+    pub fn draw(&mut self, text: &str, scroll: u16, command: Option<&str>) {
         self.terminal
             .draw(|f| {
                 let size = f.size();
@@ -89,6 +92,13 @@ impl MusicPlayerTUI {
                 let inner = block.inner(f.size());
                 f.render_widget(block, size);
                 f.render_widget(text, inner);
+                if let Some(command) = command {
+                    let text = ratatui::widgets::Paragraph::new(command);
+                    let mut inner = inner;
+                    inner.y = inner.height;
+                    inner.height = 1;
+                    f.render_widget(text, inner);
+                }
             })
             .unwrap();
     }
@@ -102,9 +112,10 @@ impl MusicPlayerTUI {
         let mut playback_paused = true;
         let mut audio_ready = false;
         let mut scroll: u16 = 0;
+        let mut command_text = None;
 
         loop {
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            std::thread::sleep(std::time::Duration::from_millis(16));
             if let Some(recv) = &self.tui_signal_recv {
                 if let Ok(signal) = recv.try_recv() {
                     self.log_send.send_log_message(format!(
@@ -112,6 +123,18 @@ impl MusicPlayerTUI {
                         signal
                     ));
                     match signal {
+                        TuiSignals::EnterCommandMode(true) => command_text = Some(":".to_string()),
+                        TuiSignals::EnterCommandMode(false) => command_text = None,
+                        TuiSignals::UpdateCommandText(c) => {
+                            let mut str = command_text.take().unwrap();
+                            str.push(c);
+                            command_text = Some(str);
+                        }
+                        TuiSignals::UpdateCommandTextBackspace => {
+                            let mut str = command_text.take().unwrap();
+                            str.pop();
+                            command_text = Some(str);
+                        }
                         TuiSignals::Start => audio_ready = false,
                         TuiSignals::AudioReady => {
                             playback_start = std::time::SystemTime::now();
@@ -191,14 +214,14 @@ impl MusicPlayerTUI {
                         "\n{} {} / {} vol: {}",
                         symbol, playback_time, duration, self.volume
                     ));
-                    self.draw(&to_draw, 0);
+                    self.draw(&to_draw, 0, command_text.as_deref());
                 }
                 TuiState::History => {
                     let mut to_draw = "".to_string();
                     history
                         .iter()
                         .for_each(|x| to_draw.push_str(&format!("{x}\n")));
-                    self.draw(&to_draw, scroll);
+                    self.draw(&to_draw, scroll, command_text.as_deref());
                 }
             }
         }
