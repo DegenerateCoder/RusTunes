@@ -154,8 +154,12 @@ impl TUIUserInputHandler {
         ));
         match action {
             Action::Quit => {
+                mp_logic_signal_send
+                    .send(MusicPlayerLogicSignals::End)
+                    .unwrap();
                 libmpv_signal_send.send(LibMpvSignals::End).unwrap();
                 tui_signal_send.send(TuiSignals::Quit).unwrap();
+
                 return true;
             }
             Action::View(tui_state) => {

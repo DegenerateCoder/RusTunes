@@ -10,5 +10,6 @@
   "mpv_base_volume": 100,
   "video_duration_limit_s": 600,
   "shuffle_playlist": true,
+  "play_only_recommendations": false,
   "debug_log": false
 }

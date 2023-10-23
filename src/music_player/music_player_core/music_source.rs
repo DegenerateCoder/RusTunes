@@ -32,6 +32,20 @@ impl Source {
     pub fn new_remote(path: &str) -> Result<Self, Error> {
         Ok(Source::Remote(Remote::new(path)?))
     }
+
+    pub fn get_remote_source(&self) -> Result<&Remote, Error> {
+        match self {
+            Source::Remote(remote_src) => Ok(remote_src),
+            _ => Err(Error::OtherError("Not remote source".to_owned())),
+        }
+    }
+
+    pub fn get_remote_source_mut(&mut self) -> Result<&mut Remote, Error> {
+        match self {
+            Source::Remote(remote_src) => Ok(remote_src),
+            _ => Err(Error::OtherError("Not remote source".to_owned())),
+        }
+    }
 }
 
 impl Remote {

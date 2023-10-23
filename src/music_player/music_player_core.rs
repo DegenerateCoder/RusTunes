@@ -2,6 +2,7 @@ pub mod music_source;
 
 use crate::music_player::libmpv_handlers::LibMpvSignals;
 use crate::music_player::logger::{Error, LogSender};
+use crate::music_player::music_player_config::MusicPlayerConfig;
 use crate::music_player::music_player_os_interface::OSInterfaceSignals;
 use crate::music_player::tui::{user_input_handler::TuiInputHandlerSignals, TuiSignals};
 use rand::seq::SliceRandom;
@@ -28,19 +29,8 @@ pub struct MusicPlayerLogic {
     tui_signal_send: Option<crossbeam::channel::Sender<TuiSignals>>,
     os_interface_signal_send: Option<crossbeam::channel::Sender<OSInterfaceSignals>>,
     tui_input_handler_send: Option<crossbeam::channel::Sender<TuiInputHandlerSignals>>,
+    play_only_recommendations: bool,
     log_send: LogSender,
-}
-
-#[derive(serde::Deserialize)]
-pub struct MusicPlayerConfig {
-    piped_api_domains: Vec<String>,
-    piped_api_domain_index: usize,
-    shuffle_playlist: bool,
-    invidious_api_domains: Vec<String>,
-    invidious_api_domain_index: usize,
-    pub mpv_base_volume: i64,
-    video_duration_limit_s: u64,
-    pub debug_log: bool,
 }
 
 impl MusicPlayerLogic {
@@ -65,6 +55,7 @@ impl MusicPlayerLogic {
             tui_signal_send: None,
             os_interface_signal_send: None,
             tui_input_handler_send: None,
+            play_only_recommendations: config.play_only_recommendations,
             log_send,
         }
     }
@@ -94,9 +85,41 @@ impl MusicPlayerLogic {
         if user_input.contains("list=") {
             self.playlist_to_play = music_source::Remote::url_into_playlist_id(user_input).unwrap();
             self.prepare_playlist()?;
+
+            if self.play_only_recommendations {
+                let last_to_play = self.to_play.pop().unwrap();
+                for music_source in &self.to_play {
+                    let remote_src = music_source.get_remote_source()?;
+                    self.played_video_ids.push(remote_src.video_id.clone());
+                    self.related_queue.push_back(remote_src.video_id.clone());
+                }
+                self.to_play.clear();
+
+                self.to_play.push(last_to_play);
+                self.prepare_next_to_play()?;
+                self.to_play_index = 0;
+                let recom_music_source = self.to_play.pop().unwrap();
+                self.to_play.clear();
+                self.to_play.push(recom_music_source);
+            }
         } else {
-            let music_source = music_source::Source::new_remote(user_input).unwrap();
-            self.to_play.push(music_source);
+            if self.play_only_recommendations {
+                let music_source = music_source::Source::new_remote(user_input).unwrap();
+
+                let remote_src = music_source.get_remote_source()?;
+                self.played_video_ids.push(remote_src.video_id.clone());
+                self.to_play.push(music_source);
+
+                self.prepare_next_to_play()?;
+
+                self.to_play_index = 0;
+                let recom_music_source = self.to_play.pop().unwrap();
+                self.to_play.clear();
+                self.to_play.push(recom_music_source);
+            } else {
+                let music_source = music_source::Source::new_remote(user_input).unwrap();
+                self.to_play.push(music_source);
+            }
         }
         Ok(())
     }

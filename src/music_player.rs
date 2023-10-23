@@ -1,5 +1,6 @@
 mod libmpv_handlers;
 mod logger;
+mod music_player_config;
 mod music_player_core;
 #[cfg_attr(
     not(target_os = "android"),
@@ -24,11 +25,8 @@ pub struct MusicPlayer {
 
 impl MusicPlayer {
     pub fn new() -> Self {
-        let config = std::fs::read_to_string("conf.json").unwrap_or_else(|_| {
-            println!("Using default config");
-            std::fs::read_to_string("def_conf.json").unwrap()
-        });
-        let config: music_player_core::MusicPlayerConfig = serde_json::from_str(&config).unwrap();
+        let config: music_player_config::MusicPlayerConfig =
+            music_player_config::MusicPlayerConfig::new().unwrap();
         let logger = {
             if config.debug_log {
                 Some(logger::Logger::new())

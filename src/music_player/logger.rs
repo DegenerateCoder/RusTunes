@@ -9,6 +9,7 @@ pub enum Error {
     AllPipedApiDomainsDown(String),
     StdIOError(std::io::Error),
     OtherError(String),
+    SerdeJSONError(serde_json::Error),
 }
 
 impl From<reqwest::Error> for Error {
@@ -20,6 +21,12 @@ impl From<reqwest::Error> for Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         Error::StdIOError(err)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Error::SerdeJSONError(err)
     }
 }
 

@@ -129,7 +129,7 @@ impl EventHandler {
                 }
                 Err(e) => {
                     self.log_send.send_log_message(format!(
-                        "EventHandler::libmpv_event_handling -> {:?}",
+                        "EventHandler::libmpv_event_handling -> Error::{:?}",
                         e
                     ));
                 }
@@ -176,9 +176,6 @@ impl EventHandler {
                 self.tui_signal_send.send(TuiSignals::AudioReady).unwrap();
             }
             libmpv::events::Event::Shutdown => {
-                self.mp_logic_signal_send
-                    .send(MusicPlayerLogicSignals::End)
-                    .unwrap();
                 self.log_send.send_quit_signal();
                 return true;
             }
