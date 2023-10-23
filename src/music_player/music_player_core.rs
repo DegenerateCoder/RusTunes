@@ -34,8 +34,8 @@ pub struct MusicPlayerLogic {
 }
 
 impl MusicPlayerLogic {
-    pub fn new(config: MusicPlayerConfig, log_send: LogSender) -> Self {
-        MusicPlayerLogic {
+    pub fn new(config: MusicPlayerConfig, log_send: LogSender) -> Result<Self, Error> {
+        Ok(MusicPlayerLogic {
             to_play: Vec::new(),
             to_play_index: 0,
             playlist_to_play: "".to_string(),
@@ -49,7 +49,7 @@ impl MusicPlayerLogic {
                 config.invidious_api_domain_index,
                 config.video_duration_limit_s,
                 log_send.clone(),
-            ),
+            )?,
             mp_logic_signal_recv: None,
             libmpv_signal_send: None,
             tui_signal_send: None,
@@ -57,7 +57,7 @@ impl MusicPlayerLogic {
             tui_input_handler_send: None,
             play_only_recommendations: config.play_only_recommendations,
             log_send,
-        }
+        })
     }
 
     pub fn create_signal_channel(&mut self) -> crossbeam::channel::Sender<MusicPlayerLogicSignals> {
@@ -101,6 +101,15 @@ impl MusicPlayerLogic {
                 let recom_music_source = self.to_play.pop().unwrap();
                 self.to_play.clear();
                 self.to_play.push(recom_music_source);
+
+                self.log_send.send_log_message(format!(
+                    "MusicPlayerLogic::process_user_input TO_PLAY -> {:?}",
+                    self.to_play
+                ));
+                self.log_send.send_log_message(format!(
+                    "MusicPlayerLogic::process_user_input RELATED_QUEUE-> {:?}",
+                    self.related_queue
+                ));
             }
         } else {
             if self.play_only_recommendations {

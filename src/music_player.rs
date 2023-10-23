@@ -60,7 +60,7 @@ impl MusicPlayer {
         let tui_input_handler_send = tui_input_handler.create_signal_channel();
 
         let mut music_player_logic =
-            music_player_core::MusicPlayerLogic::new(config, log_send.clone());
+            music_player_core::MusicPlayerLogic::new(config, log_send.clone()).unwrap();
         let mp_logic_signal_send = music_player_logic.create_signal_channel();
 
         let mut music_player_os_interface =
