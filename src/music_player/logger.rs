@@ -7,6 +7,7 @@ pub enum Error {
     ReqwestError(reqwest::Error),
     NoRelatedVideoFound(String),
     AllPipedApiDomainsDown(String),
+    AllInvidiousApiDomainsDown(String),
     StdIOError(std::io::Error),
     OtherError(String),
     SerdeJSONError(serde_json::Error),

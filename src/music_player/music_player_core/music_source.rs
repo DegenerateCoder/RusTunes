@@ -7,6 +7,7 @@ pub struct RemoteSourceProcessor {
     invidious_api_domain_index: usize,
     duration_limit: u64,
     piped_api_domain_index_start: usize,
+    invidious_api_domain_index_start: usize,
     log_send: LogSender,
     reqwest_client: reqwest::blocking::Client,
 }
@@ -107,6 +108,7 @@ impl RemoteSourceProcessor {
             invidious_api_domain_index,
             duration_limit,
             piped_api_domain_index_start: piped_api_domain_index,
+            invidious_api_domain_index_start: invidious_api_domain_index,
             log_send,
             reqwest_client,
         })
@@ -136,7 +138,7 @@ impl RemoteSourceProcessor {
         &self.piped_api_domains[self.piped_api_domain_index]
     }
 
-    pub fn get_invidious_api_domains(&self) -> &str {
+    pub fn get_invidious_api_domain(&self) -> &str {
         &self.invidious_api_domains[self.invidious_api_domain_index]
     }
 
@@ -186,23 +188,32 @@ impl RemoteSourceProcessor {
         Ok(())
     }
 
-    pub fn get_video_genre(&self, source: &Remote) -> Result<String, Error> {
-        let result = self._get_video_genre(source);
+    pub fn get_video_genre(&mut self, source: &Remote) -> Result<String, Error> {
+        let mut result = self._get_video_genre(source);
 
-        if result.is_err() {
+        while result.is_err() {
             self.log_send.send_log_message(format!(
                 "RemoteSourceProcessor::->get_video_genre {:?}",
                 result
             ));
+            let update = self.next_invidious_api_domains_index();
+            if update.is_err() {
+                self.log_send.send_log_message(format!(
+                    "RemoteSourceProcessor::->get_video_genre {:?}",
+                    update
+                ));
+                return Err(update.unwrap_err());
+            }
+            result = self._get_video_genre(source);
         }
 
         Ok(result?)
     }
 
-    pub fn _get_video_genre(&self, source: &Remote) -> Result<String, Error> {
+    pub fn _get_video_genre(&mut self, source: &Remote) -> Result<String, Error> {
         let request_url = format!(
             "{}/api/v1/videos/{}",
-            self.get_invidious_api_domains(),
+            self.get_invidious_api_domain(),
             &source.video_id
         );
 
@@ -214,6 +225,7 @@ impl RemoteSourceProcessor {
             .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
         let genre = genre.as_str().unwrap().to_string();
 
+        self.invidious_api_domain_index_start = self.invidious_api_domain_index;
         Ok(genre)
     }
 
@@ -273,7 +285,7 @@ impl RemoteSourceProcessor {
     }
 
     fn check_filters_for_related_video_url(
-        &self,
+        &mut self,
         video_url: &str,
         stream_json: &serde_json::Value,
         played_video_ids: &Vec<String>,
@@ -365,7 +377,7 @@ impl RemoteSourceProcessor {
 
         if result.is_err() {
             self.log_send.send_log_message(format!(
-                "RemoteSourceProcessor::playlist_id -> {:?}",
+                "RemoteSourceProcessor::fetch_piped_api_domains -> {:?}",
                 result
             ));
         }
@@ -402,5 +414,83 @@ impl RemoteSourceProcessor {
         ));
 
         Ok(())
+    }
+
+    pub fn fetch_invidious_api_domains(&mut self) -> Result<(), Error> {
+        let result = self._fetch_invidious_api_domains();
+
+        if result.is_err() {
+            self.log_send.send_log_message(format!(
+                "RemoteSourceProcessor::fetch_invidious_api_domains -> {:?}",
+                result
+            ));
+        }
+
+        Ok(result?)
+    }
+
+    pub fn _fetch_invidious_api_domains(&mut self) -> Result<(), Error> {
+        let request_url = "https://api.invidious.io/instances.json?pretty=0&sort_by=type,health";
+
+        let request = self.reqwest_client.get(request_url).build()?;
+        let response: serde_json::Value = self.reqwest_client.execute(request)?.json()?;
+
+        let instances = response
+            .as_array()
+            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+
+        self.invidious_api_domains.clear();
+
+        for instance in instances {
+            let instance_data = instance
+                .get(1)
+                .ok_or_else(|| Error::OtherError(format!("{:?}", instance.to_string())))?;
+            let api = instance_data
+                .get("api")
+                .ok_or_else(|| Error::OtherError(format!("{:?}", instance.to_string())))?
+                .as_bool();
+            if let Some(api) = api {
+                if !api {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+            let api_url = instance_data
+                .get("uri")
+                .ok_or_else(|| Error::OtherError(format!("{:?}", instance.to_string())))?;
+            let api_url = api_url.as_str().unwrap();
+
+            self.invidious_api_domains.push(api_url.to_string());
+            self.invidious_api_domain_index = 0;
+            self.invidious_api_domain_index_start = 0;
+        }
+
+        self.log_send.send_log_message(format!(
+            "RemoteSourceProcessor::fetch_invidious_api_domains -> {:?}",
+            self.get_invidious_api_domain()
+        ));
+
+        Ok(())
+    }
+
+    pub fn next_invidious_api_domains_index(&mut self) -> Result<(), Error> {
+        let mut i = self.invidious_api_domain_index;
+        i += 1;
+        if i >= self.invidious_api_domains.len() {
+            i = 0;
+        }
+        if i == self.invidious_api_domain_index_start {
+            Err(Error::AllInvidiousApiDomainsDown(
+                "All invidious api domains are unrechable".to_string(),
+            ))
+        } else {
+            self.log_send.send_log_message(format!(
+                "RemoteSourceProcessor::next_invidious_api_domains_index -> {:?}",
+                self.get_invidious_api_domain()
+            ));
+            self.invidious_api_domain_index = i;
+            Ok(())
+        }
     }
 }

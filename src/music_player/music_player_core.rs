@@ -101,15 +101,6 @@ impl MusicPlayerLogic {
                 let recom_music_source = self.to_play.pop().unwrap();
                 self.to_play.clear();
                 self.to_play.push(recom_music_source);
-
-                self.log_send.send_log_message(format!(
-                    "MusicPlayerLogic::process_user_input TO_PLAY -> {:?}",
-                    self.to_play
-                ));
-                self.log_send.send_log_message(format!(
-                    "MusicPlayerLogic::process_user_input RELATED_QUEUE-> {:?}",
-                    self.related_queue
-                ));
             }
         } else {
             if self.play_only_recommendations {
@@ -272,10 +263,18 @@ impl MusicPlayerLogic {
                         .get_related_video_url(&related_video_id, &self.played_video_ids);
 
                     while next_to_play.is_err() {
-                        let update = self.remote_src_proc.next_piped_api_domains_index();
-                        if update.is_err() {
-                            self.piped_api_domains_error()?;
+                        match next_to_play.unwrap_err() {
+                            Error::AllInvidiousApiDomainsDown(_) => {
+                                self.invidious_api_domains_error()?
+                            }
+                            _ => {
+                                let update = self.remote_src_proc.next_piped_api_domains_index();
+                                if update.is_err() {
+                                    self.piped_api_domains_error()?;
+                                }
+                            }
                         }
+
                         next_to_play = self
                             .remote_src_proc
                             .get_related_video_url(&related_video_id, &self.played_video_ids);
@@ -302,6 +301,30 @@ impl MusicPlayerLogic {
         self.to_play_index += 1;
 
         Ok(())
+    }
+
+    fn invidious_api_domains_error(&mut self) -> Result<(), Error> {
+        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
+        let os_interface_signal_send = self.os_interface_signal_send.as_ref().unwrap();
+        let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
+        let tui_input_handler_send = self.tui_input_handler_send.as_ref().unwrap();
+
+        self.log_send
+            .send_log_message(format!("MusicPlayerLogic::invidious_api_domains_error"));
+
+        let result = self.remote_src_proc.fetch_invidious_api_domains();
+        if result.is_err() {
+            libmpv_signal_send.send(LibMpvSignals::End).unwrap();
+            tui_signal_send.send(TuiSignals::Quit).unwrap();
+            tui_input_handler_send
+                .send(TuiInputHandlerSignals::Quit)
+                .unwrap();
+            os_interface_signal_send
+                .send(OSInterfaceSignals::End)
+                .unwrap();
+        }
+
+        Ok(result?)
     }
 
     fn piped_api_domains_error(&mut self) -> Result<(), Error> {
