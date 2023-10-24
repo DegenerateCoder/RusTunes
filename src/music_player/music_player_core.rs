@@ -188,56 +188,53 @@ impl MusicPlayerLogic {
         let os_interface_signal_send = self.os_interface_signal_send.as_ref().unwrap();
 
         let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
+        let remote_src = music_source.get_remote_source_mut()?;
+
         self.log_send.send_log_message(format!(
-            "MusicPlayerLogic::prepare_audio -> {:?}",
-            music_source
+            "MusicPlayerLogic::prepare_audio -> {:?}::{:?}",
+            remote_src.video_id, remote_src.title
         ));
-        match music_source {
-            music_source::Source::Remote(remote_src) => {
-                let played = self.played_video_ids.contains(&remote_src.video_id);
-                if !played {
-                    self.played_video_ids.push(remote_src.video_id.clone());
-                    if remote_src.audio_stream_url.is_empty() {
-                        while self
-                            .remote_src_proc
-                            .set_audio_url_title(remote_src)
-                            .is_err()
-                        {
-                            let update = self.remote_src_proc.next_piped_api_domains_index();
-                            if update.is_err() {
-                                self.played_video_ids.pop().unwrap();
-                                self.piped_api_domains_error()?;
-                                self.prepare_audio()?;
-                                return Ok(());
-                            }
-                        }
+        let played = self.played_video_ids.contains(&remote_src.video_id);
+        if !played {
+            self.played_video_ids.push(remote_src.video_id.clone());
+            if remote_src.audio_stream_url.is_empty() {
+                while self
+                    .remote_src_proc
+                    .set_audio_url_title(remote_src)
+                    .is_err()
+                {
+                    let update = self.remote_src_proc.next_piped_api_domains_index();
+                    if update.is_err() {
+                        self.played_video_ids.pop().unwrap();
+                        self.piped_api_domains_error()?;
+                        self.prepare_audio()?;
+                        return Ok(());
                     }
                 }
-                tui_signal_send
-                    .send(TuiSignals::UpdateTitle(format!(
-                        "{}\n{}/{}",
-                        remote_src.title.to_string(),
-                        self.remote_src_proc.get_piped_api_domain(),
-                        remote_src.video_id
-                    )))
-                    .unwrap();
-                tui_signal_send
-                    .send(TuiSignals::UpdateDuration(remote_src.length))
-                    .unwrap();
-                os_interface_signal_send
-                    .send(OSInterfaceSignals::UpdateMetadataTitle(
-                        remote_src.title.to_string(),
-                    ))
-                    .unwrap();
-                if !played {
-                    libmpv_signal_send
-                        .send(LibMpvSignals::PlayAudio(
-                            remote_src.audio_stream_url.to_string(),
-                        ))
-                        .unwrap();
-                }
             }
-            _ => panic!(),
+        }
+        tui_signal_send
+            .send(TuiSignals::UpdateTitle(format!(
+                "{}\n{}/{}",
+                remote_src.title.to_string(),
+                self.remote_src_proc.get_piped_api_domain(),
+                remote_src.video_id
+            )))
+            .unwrap();
+        tui_signal_send
+            .send(TuiSignals::UpdateDuration(remote_src.length))
+            .unwrap();
+        os_interface_signal_send
+            .send(OSInterfaceSignals::UpdateMetadataTitle(
+                remote_src.title.to_string(),
+            ))
+            .unwrap();
+        if !played {
+            libmpv_signal_send
+                .send(LibMpvSignals::PlayAudio(
+                    remote_src.audio_stream_url.to_string(),
+                ))
+                .unwrap();
         }
 
         Ok(())
@@ -245,58 +242,50 @@ impl MusicPlayerLogic {
 
     fn prepare_next_to_play(&mut self) -> Result<(), Error> {
         let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
+        let remote_src = music_source.get_remote_source_mut()?;
+
         self.log_send.send_log_message(format!(
-            "MusicPlayerLogic::prepare_next_to_play -> {:?}",
-            music_source
+            "MusicPlayerLogic::prepare_next_to_play -> {:?}::{:?}",
+            remote_src.video_id, remote_src.title
         ));
-        match music_source {
-            music_source::Source::Remote(remote_src) => {
-                if !self.related_queue.contains(&remote_src.video_id) {
-                    self.related_queue.push_back(remote_src.video_id.clone());
+
+        if !self.related_queue.contains(&remote_src.video_id) {
+            self.related_queue.push_back(remote_src.video_id.clone());
+        }
+        if self.to_play_index == self.to_play.len() - 1 {
+            let related_video_id = self.related_queue.pop_front().unwrap();
+            self.related_queue.push_back(related_video_id.clone());
+
+            let mut next_to_play = self
+                .remote_src_proc
+                .get_related_video_url(&related_video_id, &self.played_video_ids);
+
+            while next_to_play.is_err() {
+                match next_to_play.unwrap_err() {
+                    Error::AllInvidiousApiDomainsDown(_) => self.invidious_api_domains_error()?,
+                    _ => {
+                        let update = self.remote_src_proc.next_piped_api_domains_index();
+                        if update.is_err() {
+                            self.piped_api_domains_error()?;
+                        }
+                    }
                 }
-                if self.to_play_index == self.to_play.len() - 1 {
-                    let related_video_id = self.related_queue.pop_front().unwrap();
-                    self.related_queue.push_back(related_video_id.clone());
 
-                    let mut next_to_play = self
-                        .remote_src_proc
-                        .get_related_video_url(&related_video_id, &self.played_video_ids);
+                next_to_play = self
+                    .remote_src_proc
+                    .get_related_video_url(&related_video_id, &self.played_video_ids);
+            }
+            let mut next_to_play = next_to_play.unwrap();
+            let next = next_to_play.get_remote_source_mut()?;
 
-                    while next_to_play.is_err() {
-                        match next_to_play.unwrap_err() {
-                            Error::AllInvidiousApiDomainsDown(_) => {
-                                self.invidious_api_domains_error()?
-                            }
-                            _ => {
-                                let update = self.remote_src_proc.next_piped_api_domains_index();
-                                if update.is_err() {
-                                    self.piped_api_domains_error()?;
-                                }
-                            }
-                        }
-
-                        next_to_play = self
-                            .remote_src_proc
-                            .get_related_video_url(&related_video_id, &self.played_video_ids);
-                    }
-                    let mut next_to_play = next_to_play.unwrap();
-
-                    match &mut next_to_play {
-                        music_source::Source::Remote(next) => {
-                            while self.remote_src_proc.set_audio_url_title(next).is_err() {
-                                let update = self.remote_src_proc.next_piped_api_domains_index();
-                                if update.is_err() {
-                                    self.piped_api_domains_error()?;
-                                }
-                            }
-                        }
-                        _ => panic!(),
-                    }
-
-                    self.to_play.push(next_to_play);
+            while self.remote_src_proc.set_audio_url_title(next).is_err() {
+                let update = self.remote_src_proc.next_piped_api_domains_index();
+                if update.is_err() {
+                    self.piped_api_domains_error()?;
                 }
             }
-            _ => panic!(),
+
+            self.to_play.push(next_to_play);
         }
         self.to_play_index += 1;
 

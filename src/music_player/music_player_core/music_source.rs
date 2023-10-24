@@ -234,12 +234,30 @@ impl RemoteSourceProcessor {
         video_id: &str,
         played_video_ids: &Vec<String>,
     ) -> Result<Source, Error> {
+        self.log_send.send_log_message(format!(
+            "RemoteSourceProcessor::get_related_video_url -> {:?}",
+            video_id
+        ));
+
         let result = self._get_related_video_url(video_id, played_video_ids);
 
         if result.is_err() {
             self.log_send.send_log_message(format!(
-                "RemoteSourceProcessor::get_related_video_url -> {:?}",
+                "RemoteSourceProcessor::get_related_video_url -> Error: {:?}",
                 result
+            ));
+        }
+
+        if result.is_ok() {
+            self.log_send.send_log_message(format!(
+                "RemoteSourceProcessor::get_related_video_url -> {:?} => {:?}",
+                video_id,
+                result
+                    .as_ref()
+                    .unwrap()
+                    .get_remote_source()
+                    .unwrap()
+                    .video_id
             ));
         }
 
