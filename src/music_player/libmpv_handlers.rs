@@ -56,17 +56,13 @@ impl LibMpvHandler {
     }
 
     pub fn handle_signals(&self) {
-        let mut err = 0;
         loop {
             if let Some(recv) = &self.libmpv_signal_recv {
                 if let Ok(signal) = recv.recv() {
                     self.log_send
                         .send_log_message(format!("LibMpvHandler::handle_signals -> {:?}", signal));
                     match signal {
-                        LibMpvSignals::PlayAudio(mut source) => {
-                            if err == 2 {
-                                source = "A".to_owned();
-                            }
+                        LibMpvSignals::PlayAudio(source) => {
                             self.mpv
                                 .playlist_load_files(&[(
                                     &source,
@@ -74,7 +70,6 @@ impl LibMpvHandler {
                                     None,
                                 )])
                                 .unwrap();
-                            err += 1;
                         }
                         LibMpvSignals::PauseResume => {
                             let mut pause: bool = self.mpv.get_property("pause").unwrap();
