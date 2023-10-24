@@ -14,6 +14,7 @@ pub enum MusicPlayerLogicSignals {
     PlaybackEnded,
     PlayPrev,
     End,
+    BrokenUrl,
 }
 
 pub struct MusicPlayerLogic {
@@ -175,10 +176,65 @@ impl MusicPlayerLogic {
                                 self.to_play_index -= 2;
                             }
                         }
+                        MusicPlayerLogicSignals::BrokenUrl => {
+                            let update = self.remote_src_proc.next_piped_api_domains_index();
+                            if update.is_err() {
+                                self.piped_api_domains_error()?;
+                            }
+                            self.broken_url()?;
+                        }
                     }
                 }
             }
         }
+        Ok(())
+    }
+
+    fn broken_url(&mut self) -> Result<(), Error> {
+        self.to_play_index -= 1;
+
+        self.fix_broken_url(self.to_play_index)?;
+        self.fix_broken_url(self.to_play_index + 1)?;
+
+        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
+        let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
+        let remote_src = music_source.get_remote_source_mut()?;
+
+        libmpv_signal_send
+            .send(LibMpvSignals::PlayAudio(
+                remote_src.audio_stream_url.to_string(),
+            ))
+            .unwrap();
+        libmpv_signal_send
+            .send(LibMpvSignals::RemoveBrokenItem)
+            .unwrap();
+        self.to_play_index += 1;
+
+        Ok(())
+    }
+
+    fn fix_broken_url(&mut self, broken_index: usize) -> Result<(), Error> {
+        let broken_music_source = self.to_play.get_mut(broken_index).unwrap();
+        let broken_remote_src = broken_music_source.get_remote_source_mut()?;
+
+        self.log_send.send_log_message(format!(
+            "MusicPlayerLogic::fix_broken_url -> {:?}::{:?}",
+            broken_remote_src.video_id, broken_remote_src.title
+        ));
+
+        while self
+            .remote_src_proc
+            .set_audio_url_title(broken_remote_src)
+            .is_err()
+        {
+            let update = self.remote_src_proc.next_piped_api_domains_index();
+            if update.is_err() {
+                self.piped_api_domains_error()?;
+                self.fix_broken_url(broken_index)?;
+                return Ok(());
+            }
+        }
+
         Ok(())
     }
 

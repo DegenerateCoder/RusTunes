@@ -159,7 +159,8 @@ impl MusicPlayerTUI {
                             let t = t.replace('\n', " ");
                             let mut contains = false;
                             history.iter().for_each(|entry| {
-                                contains = contains || entry.contains(&t);
+                                contains =
+                                    contains || entry.contains(&t.split("https:").next().unwrap());
                             });
                             if !contains {
                                 history.push(format!("{}: {}", history.len(), t));

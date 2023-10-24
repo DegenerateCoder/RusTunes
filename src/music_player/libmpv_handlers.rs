@@ -4,6 +4,7 @@ use crate::music_player::tui::TuiSignals;
 
 #[derive(Debug)]
 pub enum LibMpvSignals {
+    RemoveBrokenItem,
     PlayAudio(String),
     PlayNext,
     PlayPrev,
@@ -11,6 +12,8 @@ pub enum LibMpvSignals {
     SetVolume(i64),
     End,
 }
+
+const MPV_ERROR_LOADING_FAILED: libmpv::Error = libmpv::Error::Raw(-13);
 
 pub struct LibMpvHandler {
     mpv: libmpv::Mpv,
@@ -53,13 +56,17 @@ impl LibMpvHandler {
     }
 
     pub fn handle_signals(&self) {
+        let mut err = 0;
         loop {
             if let Some(recv) = &self.libmpv_signal_recv {
                 if let Ok(signal) = recv.recv() {
                     self.log_send
                         .send_log_message(format!("LibMpvHandler::handle_signals -> {:?}", signal));
                     match signal {
-                        LibMpvSignals::PlayAudio(source) => {
+                        LibMpvSignals::PlayAudio(mut source) => {
+                            if err == 2 {
+                                source = "A".to_owned();
+                            }
                             self.mpv
                                 .playlist_load_files(&[(
                                     &source,
@@ -67,6 +74,7 @@ impl LibMpvHandler {
                                     None,
                                 )])
                                 .unwrap();
+                            err += 1;
                         }
                         LibMpvSignals::PauseResume => {
                             let mut pause: bool = self.mpv.get_property("pause").unwrap();
@@ -85,6 +93,11 @@ impl LibMpvHandler {
                         LibMpvSignals::End => {
                             self.mpv.command("quit", &["0"]).unwrap();
                             break;
+                        }
+                        LibMpvSignals::RemoveBrokenItem => {
+                            let count = self.mpv.get_property::<i64>("playlist-count").unwrap();
+                            let count: usize = count.try_into().unwrap();
+                            self.mpv.playlist_remove_index(count - 2).unwrap();
                         }
                     }
                 }
@@ -127,11 +140,20 @@ impl EventHandler {
                         break;
                     }
                 }
-                Err(e) => {
+                Err(err) => {
                     self.log_send.send_log_message(format!(
                         "EventHandler::libmpv_event_handling -> Error::{:?}",
-                        e
+                        err
                     ));
+
+                    match err {
+                        MPV_ERROR_LOADING_FAILED => {
+                            self.mp_logic_signal_send
+                                .send(MusicPlayerLogicSignals::BrokenUrl)
+                                .unwrap();
+                        }
+                        _ => (),
+                    }
                 }
             }
         }
