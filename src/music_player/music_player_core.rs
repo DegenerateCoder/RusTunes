@@ -17,6 +17,13 @@ pub enum MusicPlayerLogicSignals {
     BrokenUrl,
 }
 
+struct SignalSendersCollection {
+    libmpv: Option<crossbeam::channel::Sender<LibMpvSignals>>,
+    tui: Option<crossbeam::channel::Sender<TuiSignals>>,
+    os_interface: Option<crossbeam::channel::Sender<OSInterfaceSignals>>,
+    tui_input_handler: Option<crossbeam::channel::Sender<TuiInputHandlerSignals>>,
+}
+
 pub struct MusicPlayerLogic {
     to_play: Vec<music_source::Source>,
     to_play_index: usize,
@@ -26,10 +33,7 @@ pub struct MusicPlayerLogic {
     related_queue: VecDeque<String>,
     remote_src_proc: music_source::RemoteSourceProcessor,
     mp_logic_signal_recv: Option<crossbeam::channel::Receiver<MusicPlayerLogicSignals>>,
-    libmpv_signal_send: Option<crossbeam::channel::Sender<LibMpvSignals>>,
-    tui_signal_send: Option<crossbeam::channel::Sender<TuiSignals>>,
-    os_interface_signal_send: Option<crossbeam::channel::Sender<OSInterfaceSignals>>,
-    tui_input_handler_send: Option<crossbeam::channel::Sender<TuiInputHandlerSignals>>,
+    signals_senders: SignalSendersCollection,
     play_only_recommendations: bool,
     log_send: LogSender,
 }
@@ -52,10 +56,12 @@ impl MusicPlayerLogic {
                 log_send.clone(),
             )?,
             mp_logic_signal_recv: None,
-            libmpv_signal_send: None,
-            tui_signal_send: None,
-            os_interface_signal_send: None,
-            tui_input_handler_send: None,
+            signals_senders: SignalSendersCollection {
+                libmpv: None,
+                tui: None,
+                os_interface: None,
+                tui_input_handler: None,
+            },
             play_only_recommendations: config.play_only_recommendations,
             log_send,
         })
@@ -76,10 +82,10 @@ impl MusicPlayerLogic {
         tui_signal_send: crossbeam::channel::Sender<TuiSignals>,
         tui_input_handler_send: crossbeam::channel::Sender<TuiInputHandlerSignals>,
     ) {
-        self.libmpv_signal_send = Some(libmpv_signal_send);
-        self.os_interface_signal_send = Some(os_interface_signal_send);
-        self.tui_signal_send = Some(tui_signal_send);
-        self.tui_input_handler_send = Some(tui_input_handler_send);
+        self.signals_senders.libmpv = Some(libmpv_signal_send);
+        self.signals_senders.os_interface = Some(os_interface_signal_send);
+        self.signals_senders.tui = Some(tui_signal_send);
+        self.signals_senders.tui_input_handler = Some(tui_input_handler_send);
     }
 
     pub fn process_user_input(&mut self, user_input: &str) -> Result<(), Error> {
@@ -159,7 +165,8 @@ impl MusicPlayerLogic {
                         "MusicPlayerLogic::handle_playback_logic -> {:?}",
                         signal
                     ));
-                    let os_interface_signal_send = self.os_interface_signal_send.as_ref().unwrap();
+                    let os_interface_signal_send =
+                        self.signals_senders.os_interface.as_ref().unwrap();
                     match signal {
                         MusicPlayerLogicSignals::PlaybackEnded => {
                             self.prepare_audio()?;
@@ -196,7 +203,7 @@ impl MusicPlayerLogic {
         self.fix_broken_url(self.to_play_index)?;
         self.fix_broken_url(self.to_play_index + 1)?;
 
-        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
+        let libmpv_signal_send = self.signals_senders.libmpv.as_ref().unwrap();
         let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
         let remote_src = music_source.get_remote_source_mut()?;
 
@@ -239,9 +246,9 @@ impl MusicPlayerLogic {
     }
 
     fn prepare_audio(&mut self) -> Result<(), Error> {
-        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
-        let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
-        let os_interface_signal_send = self.os_interface_signal_send.as_ref().unwrap();
+        let libmpv_signal_send = self.signals_senders.libmpv.as_ref().unwrap();
+        let tui_signal_send = self.signals_senders.tui.as_ref().unwrap();
+        let os_interface_signal_send = self.signals_senders.os_interface.as_ref().unwrap();
 
         let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
         let remote_src = music_source.get_remote_source_mut()?;
@@ -349,10 +356,10 @@ impl MusicPlayerLogic {
     }
 
     fn invidious_api_domains_error(&mut self) -> Result<(), Error> {
-        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
-        let os_interface_signal_send = self.os_interface_signal_send.as_ref().unwrap();
-        let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
-        let tui_input_handler_send = self.tui_input_handler_send.as_ref().unwrap();
+        let libmpv_signal_send = self.signals_senders.libmpv.as_ref().unwrap();
+        let os_interface_signal_send = self.signals_senders.os_interface.as_ref().unwrap();
+        let tui_signal_send = self.signals_senders.tui.as_ref().unwrap();
+        let tui_input_handler_send = self.signals_senders.tui_input_handler.as_ref().unwrap();
 
         self.log_send
             .send_log_message(format!("MusicPlayerLogic::invidious_api_domains_error"));
@@ -373,10 +380,10 @@ impl MusicPlayerLogic {
     }
 
     fn piped_api_domains_error(&mut self) -> Result<(), Error> {
-        let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
-        let os_interface_signal_send = self.os_interface_signal_send.as_ref().unwrap();
-        let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
-        let tui_input_handler_send = self.tui_input_handler_send.as_ref().unwrap();
+        let libmpv_signal_send = self.signals_senders.libmpv.as_ref().unwrap();
+        let os_interface_signal_send = self.signals_senders.os_interface.as_ref().unwrap();
+        let tui_signal_send = self.signals_senders.tui.as_ref().unwrap();
+        let tui_input_handler_send = self.signals_senders.tui_input_handler.as_ref().unwrap();
 
         self.log_send
             .send_log_message(format!("MusicPlayerLogic::piped_api_domains_error"));
