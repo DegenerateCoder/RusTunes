@@ -229,7 +229,7 @@ impl RemoteSourceProcessor {
         Ok(genre)
     }
 
-    pub fn get_related_video_url(
+    pub fn get_related_video_source(
         &mut self,
         video_id: &str,
         played_video_ids: &Vec<String>,
@@ -239,7 +239,7 @@ impl RemoteSourceProcessor {
             video_id
         ));
 
-        let result = self._get_related_video_url(video_id, played_video_ids);
+        let result = self._get_related_video_source(video_id, played_video_ids);
 
         if result.is_err() {
             self.log_send.send_log_message(format!(
@@ -264,7 +264,7 @@ impl RemoteSourceProcessor {
         Ok(result?)
     }
 
-    fn _get_related_video_url(
+    fn _get_related_video_source(
         &mut self,
         video_id: &str,
         played_video_ids: &Vec<String>,

@@ -4,8 +4,8 @@ use crate::music_player::tui::TuiSignals;
 
 #[derive(Debug)]
 pub enum LibMpvSignals {
-    RemoveBrokenItem,
-    PlayAudio(String),
+    RemoveBrokenItem(usize),
+    AddAudio(String),
     PlayNext,
     PlayPrev,
     PauseResume,
@@ -62,7 +62,7 @@ impl LibMpvHandler {
                     self.log_send
                         .send_log_message(format!("LibMpvHandler::handle_signals -> {:?}", signal));
                     match signal {
-                        LibMpvSignals::PlayAudio(source) => {
+                        LibMpvSignals::AddAudio(source) => {
                             self.mpv
                                 .playlist_load_files(&[(
                                     &source,
@@ -89,10 +89,8 @@ impl LibMpvHandler {
                             self.mpv.command("quit", &["0"]).unwrap();
                             break;
                         }
-                        LibMpvSignals::RemoveBrokenItem => {
-                            let count = self.mpv.get_property::<i64>("playlist-count").unwrap();
-                            let count: usize = count.try_into().unwrap();
-                            self.mpv.playlist_remove_index(count - 2).unwrap();
+                        LibMpvSignals::RemoveBrokenItem(index) => {
+                            self.mpv.playlist_remove_index(index).unwrap();
                         }
                     }
                 }
@@ -191,6 +189,9 @@ impl EventHandler {
             }
             libmpv::events::Event::PlaybackRestart => {
                 self.tui_signal_send.send(TuiSignals::AudioReady).unwrap();
+                self.mp_logic_signal_send
+                    .send(MusicPlayerLogicSignals::PrepareNextFile)
+                    .unwrap();
             }
             libmpv::events::Event::Shutdown => {
                 self.log_send.send_quit_signal();
