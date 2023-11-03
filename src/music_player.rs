@@ -24,10 +24,11 @@ pub struct MusicPlayer {
 }
 
 impl MusicPlayer {
-    pub fn new() -> Self {
+    pub fn new(args: &[String]) -> Self {
         let config: music_player_config::MusicPlayerConfig =
             music_player_config::MusicPlayerConfig::new().unwrap();
-        let logger = {
+
+        let mut logger = {
             if config.debug_log {
                 Some(logger::Logger::new())
             } else {
@@ -39,6 +40,19 @@ impl MusicPlayer {
                 logger::LogSender::new(Some(logger.as_ref().unwrap().get_signal_send()))
             } else {
                 logger::LogSender::new(None)
+            }
+        };
+
+        let config = music_player_config::MusicPlayerOptions::new(log_send.clone())
+            .process_and_apply_args(config, args)
+            .unwrap();
+
+        let log_send = {
+            if !config.debug_log {
+                logger = None;
+                logger::LogSender::new(None)
+            } else {
+                log_send
             }
         };
 
