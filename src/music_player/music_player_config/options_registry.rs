@@ -41,6 +41,15 @@ impl Arg {
             _ => None,
         }
     }
+
+    fn to_type_str(&self) -> &'static str {
+        match self {
+            Arg::USIZE(_) => "usize",
+            Arg::BOOL(_) => "bool",
+            Arg::I64(_) => "i64",
+            Arg::U64(_) => "u64",
+        }
+    }
 }
 
 pub struct OptionsRegistry {
@@ -95,6 +104,7 @@ impl OptionsRegistry {
         }
 
         let action_with_args = match action {
+            OptionType::PrintHelp => Action::PrintHelp,
             OptionType::SetPipedApiDomainIndex => {
                 Action::SetPipedApiDomainIndex(processed_args.pop()?.extract_usize()?)
             }
@@ -130,10 +140,39 @@ impl OptionsRegistry {
 
         self.map_option_to_action(option, args)
     }
+
+    pub fn generate_help_str(&self) -> String {
+        let mut help_str = String::new();
+
+        for (option, option_entry) in &self.options {
+            let mut str = format!("{option}");
+
+            if !option_entry.args.is_empty() {
+                str += "=<";
+            }
+            option_entry.args.iter().for_each(|arg| {
+                str += &format!("{},", arg.to_type_str());
+            });
+
+            if !option_entry.args.is_empty() {
+                str.pop();
+                str += ">";
+            }
+
+            help_str += &str;
+            help_str.push('\n');
+        }
+
+        let mut help_str: Vec<&str> = help_str.lines().collect();
+        help_str.sort();
+
+        help_str.join("\n")
+    }
 }
 
 #[derive(Debug)]
 pub enum OptionType {
+    PrintHelp,
     SetPipedApiDomainIndex,
     SetInvidiousApiDomainIndex,
     SetShufflePlaylist,
@@ -145,6 +184,7 @@ pub enum OptionType {
 
 #[derive(Debug)]
 pub enum Action {
+    PrintHelp,
     SetPipedApiDomainIndex(usize),
     SetInvidiousApiDomainIndex(usize),
     SetShufflePlaylist(bool),

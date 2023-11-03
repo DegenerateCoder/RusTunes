@@ -46,6 +46,11 @@ impl MusicPlayerOptions {
         let mut options = OptionsRegistry::new();
         options.add_options([
             OptionDefinition {
+                name: "--help".to_string(),
+                option_type: OptionType::PrintHelp,
+                args: vec![],
+            },
+            OptionDefinition {
                 name: "--piped_api_domain_index".to_string(),
                 option_type: OptionType::SetPipedApiDomainIndex,
                 args: vec![Arg::USIZE(None)],
@@ -99,6 +104,10 @@ impl MusicPlayerOptions {
             }
             let action = action.unwrap();
             match action {
+                Action::PrintHelp => {
+                    self.print_help();
+                    return Err(Error::PrintHelp);
+                }
                 Action::SetPipedApiDomainIndex(index) => config.piped_api_domain_index = index,
                 Action::SetShufflePlaylist(val) => config.shuffle_playlist = val,
                 Action::SetInvidiousApiDomainIndex(index) => {
@@ -111,5 +120,16 @@ impl MusicPlayerOptions {
             }
         }
         Ok(config)
+    }
+
+    pub fn print_help(&self) {
+        println!("Usage: rustunes [OPTIONS] URL");
+        println!("");
+        println!("Options:");
+
+        let options_help = self.options.generate_help_str();
+        options_help
+            .lines()
+            .for_each(|option| println!("  {option}"));
     }
 }

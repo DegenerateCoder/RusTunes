@@ -11,6 +11,7 @@ pub enum Error {
     StdIOError(std::io::Error),
     OtherError(String),
     SerdeJSONError(serde_json::Error),
+    PrintHelp,
 }
 
 impl From<reqwest::Error> for Error {

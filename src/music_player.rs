@@ -1,6 +1,6 @@
 mod libmpv_handlers;
-mod logger;
-mod music_player_config;
+pub mod logger;
+pub mod music_player_config;
 mod music_player_core;
 #[cfg_attr(
     not(target_os = "android"),
@@ -45,6 +45,13 @@ impl MusicPlayer {
 
         let config = music_player_config::MusicPlayerOptions::new(log_send.clone())
             .process_and_apply_args(config, args)
+            .map_err(|err| {
+                match err {
+                    logger::Error::PrintHelp => std::process::exit(0),
+                    _ => (),
+                }
+                err
+            })
             .unwrap();
 
         let log_send = {
