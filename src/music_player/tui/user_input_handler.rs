@@ -22,6 +22,7 @@ pub struct TUIUserInputHandler {
     tui_signal_send: Option<crossbeam::channel::Sender<TuiSignals>>,
     mp_logic_signal_send: Option<crossbeam::channel::Sender<MusicPlayerLogicSignals>>,
     log_send: logger::LogSender,
+    send_help_str: bool,
 }
 
 impl TUIUserInputHandler {
@@ -37,6 +38,7 @@ impl TUIUserInputHandler {
             tui_signal_send: None,
             mp_logic_signal_send: None,
             log_send,
+            send_help_str: true,
         }
     }
 
@@ -163,6 +165,13 @@ impl TUIUserInputHandler {
                 return true;
             }
             Action::View(tui_state) => {
+                if (tui_state == TuiState::Help) && self.send_help_str {
+                    self.send_help_str = false;
+                    let help_str = self.commands.generate_help_str();
+                    tui_signal_send
+                        .send(TuiSignals::UpdateHelpStr(help_str))
+                        .unwrap();
+                }
                 tui_signal_send
                     .send(TuiSignals::UpdateState(tui_state.clone()))
                     .unwrap();

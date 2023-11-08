@@ -1,7 +1,8 @@
 use crate::music_player::logger::Error;
 use crate::music_player::logger::LogSender;
+use crate::music_player::tui::commands::commands_registry::Arg;
 mod options_registry;
-use options_registry::{Action, Arg, OptionDefinition, OptionType, OptionsRegistry};
+use options_registry::{Action, OptionDefinition, OptionType, OptionsRegistry};
 
 #[derive(serde::Deserialize)]
 pub struct MusicPlayerConfig {

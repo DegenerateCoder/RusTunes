@@ -26,6 +26,7 @@ pub enum TuiSignals {
     UpdateTitle(String),
     UpdateDuration(u64),
     UpdateState(TuiState),
+    UpdateHelpStr(String),
     UpdateVolume(i64),
     ModifyScroll(i16),
     Quit,
@@ -35,6 +36,17 @@ pub enum TuiSignals {
 pub enum TuiState {
     Player,
     History,
+    Help,
+}
+
+impl TuiState {
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            TuiState::Player => "player",
+            TuiState::History => "history",
+            TuiState::Help => "help",
+        }
+    }
 }
 
 pub struct MusicPlayerTUI {
@@ -113,6 +125,7 @@ impl MusicPlayerTUI {
         let mut audio_ready = false;
         let mut scroll: u16 = 0;
         let mut command_text = None;
+        let mut help_text = "".to_string();
 
         loop {
             std::thread::sleep(std::time::Duration::from_millis(16));
@@ -169,6 +182,9 @@ impl MusicPlayerTUI {
                         TuiSignals::UpdateState(state) => {
                             self.tui_state = state;
                         }
+                        TuiSignals::UpdateHelpStr(help_str) => {
+                            help_text = help_str;
+                        }
                         TuiSignals::UpdateVolume(volume) => {
                             self.volume = volume;
                         }
@@ -223,6 +239,9 @@ impl MusicPlayerTUI {
                         .iter()
                         .for_each(|x| to_draw.push_str(&format!("{x}\n")));
                     self.draw(&to_draw, scroll, command_text.as_deref());
+                }
+                TuiState::Help => {
+                    self.draw(&help_text, scroll, command_text.as_deref());
                 }
             }
         }

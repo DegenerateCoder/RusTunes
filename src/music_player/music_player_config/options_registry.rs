@@ -1,55 +1,11 @@
+use crate::music_player::tui::commands::commands_registry::Arg;
+use crate::music_player::tui::TuiState;
 use std::collections::HashMap;
 
 pub struct OptionDefinition {
     pub name: String,
     pub option_type: OptionType,
     pub args: Vec<Arg>,
-}
-
-pub enum Arg {
-    USIZE(Option<usize>),
-    BOOL(Option<bool>),
-    I64(Option<i64>),
-    U64(Option<u64>),
-}
-
-impl Arg {
-    fn extract_bool(self) -> Option<bool> {
-        match self {
-            Arg::BOOL(bool) => bool,
-            _ => None,
-        }
-    }
-
-    fn extract_usize(self) -> Option<usize> {
-        match self {
-            Arg::USIZE(usize) => usize,
-            _ => None,
-        }
-    }
-
-    fn extract_i64(self) -> Option<i64> {
-        match self {
-            Arg::I64(i64) => i64,
-            _ => None,
-        }
-    }
-
-    fn extract_u64(self) -> Option<u64> {
-        match self {
-            Arg::U64(u64) => u64,
-            _ => None,
-        }
-    }
-
-    fn to_type_str(&self) -> &'static str {
-        match self {
-            Arg::USIZE(_) => "usize",
-            Arg::BOOL(_) => "bool",
-            Arg::I64(_) => "i64",
-            Arg::U64(_) => "u64",
-        }
-    }
 }
 
 pub struct OptionsRegistry {
@@ -67,6 +23,7 @@ impl OptionsRegistry {
             options: HashMap::new(),
         }
     }
+
     pub fn add_option(&mut self, option: OptionDefinition) {
         self.options.insert(
             option.name,
@@ -76,6 +33,7 @@ impl OptionsRegistry {
             },
         );
     }
+
     pub fn add_options<const N: usize>(&mut self, options: [OptionDefinition; N]) {
         for option in options {
             self.add_option(option);
@@ -95,10 +53,16 @@ impl OptionsRegistry {
         let mut processed_args = vec![];
         for (i, arg) in args.iter().enumerate() {
             let processed_arg = match action_args[i] {
-                Arg::USIZE(_) => Arg::USIZE(Some(arg.parse().ok()?)),
+                Arg::TuiState(_) => Arg::TuiState(match *arg {
+                    "player" => Some(TuiState::Player),
+                    "history" => Some(TuiState::History),
+                    _ => None,
+                }),
                 Arg::BOOL(_) => Arg::BOOL(Some(arg.parse().ok()?)),
+                Arg::I16(_) => Arg::I16(Some(arg.parse().ok()?)),
                 Arg::I64(_) => Arg::I64(Some(arg.parse().ok()?)),
                 Arg::U64(_) => Arg::U64(Some(arg.parse().ok()?)),
+                Arg::USIZE(_) => Arg::USIZE(Some(arg.parse().ok()?)),
             };
             processed_args.push(processed_arg);
         }
