@@ -88,6 +88,8 @@ impl OptionsRegistry {
                 Action::SetVideoDurationLimit(processed_args.pop()?.extract_u64()?)
             }
             OptionType::SetDebugLog => Action::SetDebugLog(processed_args.pop()?.extract_bool()?),
+            OptionType::RankPipedApiDomains => Action::RankPipedApiDomains,
+            OptionType::RankInvidiousApiDomains => Action::RankInvidiousApiDomains,
         };
 
         Some(action_with_args)
@@ -144,6 +146,8 @@ pub enum OptionType {
     SetDebugLog,
     SetPlayOnlyRecommendations,
     SetVideoDurationLimit,
+    RankPipedApiDomains,
+    RankInvidiousApiDomains,
 }
 
 #[derive(Debug)]
@@ -156,4 +160,6 @@ pub enum Action {
     SetDebugLog(bool),
     SetPlayOnlyRecommendations(bool),
     SetVideoDurationLimit(u64),
+    RankPipedApiDomains,
+    RankInvidiousApiDomains,
 }

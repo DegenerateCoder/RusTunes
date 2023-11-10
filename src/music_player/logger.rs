@@ -104,4 +104,18 @@ impl Logger {
 
         Ok(())
     }
+
+    pub fn conditional_log(message: &str, logging_enabled: bool) -> Result<(), Error> {
+        if logging_enabled {
+            let mut log_file = std::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open("log.txt")
+                .unwrap();
+
+            let timestamp = chrono::Utc::now();
+            writeln!(log_file, "{}: {}", timestamp, message)?;
+        }
+        Ok(())
+    }
 }
