@@ -150,7 +150,7 @@ pub enum OptionType {
     RankInvidiousApiDomains,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Action {
     PrintHelp,
     SetPipedApiDomainIndex(usize),

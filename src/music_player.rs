@@ -23,25 +23,10 @@ pub struct MusicPlayer {
 }
 
 impl MusicPlayer {
-    pub fn new(args: &[String], log_send: logger::LogSender) -> Self {
-        let config: music_player_config::MusicPlayerConfig =
-            music_player_config::MusicPlayerConfig::new().unwrap();
-
-        let config = music_player_config::MusicPlayerOptions::new()
-            .process_and_apply_args(config, args)
-            .map_err(|err| {
-                match err {
-                    logger::Error::PrintHelp => std::process::exit(0),
-                    _ => (),
-                }
-                err
-            })
-            .unwrap();
-
-        if !config.debug_log {
-            log::set_max_level(log::LevelFilter::Off);
-        }
-
+    pub fn new(
+        config: music_player_config::MusicPlayerConfig,
+        log_send: logger::LogSender,
+    ) -> Self {
         let mut libmpv =
             libmpv_handlers::LibMpvHandler::initialize_libmpv(config.mpv_base_volume).unwrap();
         let libmpv_signal_send = libmpv.create_signal_channel();

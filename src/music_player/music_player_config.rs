@@ -1,6 +1,7 @@
 use crate::music_player::logger::Error;
 use crate::music_player::tui::commands::commands_registry::Arg;
-mod options_registry;
+pub mod options_registry;
+use crate::music_player::music_player_core::music_source::Source;
 use options_registry::{Action, OptionDefinition, OptionType, OptionsRegistry};
 
 #[derive(serde::Deserialize)]
@@ -18,14 +19,92 @@ pub struct MusicPlayerConfig {
 
 impl MusicPlayerConfig {
     pub fn new() -> Result<Self, Error> {
-        let config = std::fs::read_to_string("conf.json").unwrap_or_else(|_| {
-            let def_conf = std::fs::read_to_string("def_conf.json").unwrap();
-            def_conf
-        });
-
-        let config: Self = serde_json::from_str(&config)?;
+        let user_config = std::fs::read_to_string("conf.json");
+        let config: Self = {
+            if user_config.is_ok() {
+                serde_json::from_str(user_config.unwrap().as_str())?
+            } else {
+                println!("Using default config");
+                log::info!("Using default config");
+                let def_conf = MusicPlayerConfig::get_def_conf();
+                serde_json::from_str(def_conf)?
+            }
+        };
 
         Ok(config)
+    }
+
+    fn get_def_conf() -> &'static str {
+        r#"
+        {
+          "piped_api_domains": [
+            "https://piped-api.garudalinux.org"
+          ],
+          "piped_api_domain_index": 0,
+          "invidious_api_domains": [
+            "https://invidious.garudalinux.org"
+          ],
+          "invidious_api_domain_index": 0,
+          "mpv_base_volume": 100,
+          "video_duration_limit_s": 600,
+          "shuffle_playlist": true,
+          "play_only_recommendations": false,
+          "debug_log": false
+        }
+        "#
+    }
+
+    pub fn apply_simple_actions(&mut self, actions: Vec<Action>) -> Vec<Action> {
+        let config = self;
+        let mut complex_actions = Vec::new();
+
+        for action in actions {
+            match action {
+                Action::SetPipedApiDomainIndex(index) => config.piped_api_domain_index = index,
+                Action::SetShufflePlaylist(val) => config.shuffle_playlist = val,
+                Action::SetInvidiousApiDomainIndex(index) => {
+                    config.invidious_api_domain_index = index
+                }
+                Action::SetMpvBaseVolume(val) => config.mpv_base_volume = val,
+                Action::SetVideoDurationLimit(val) => config.video_duration_limit_s = val,
+                Action::SetDebugLog(val) => config.debug_log = val,
+                Action::SetPlayOnlyRecommendations(val) => config.play_only_recommendations = val,
+                Action::PrintHelp => (),
+                Action::RankPipedApiDomains => complex_actions.push(Action::RankPipedApiDomains),
+                Action::RankInvidiousApiDomains => {
+                    complex_actions.push(Action::RankInvidiousApiDomains)
+                }
+            }
+        }
+
+        if !config.debug_log {
+            log::set_max_level(log::LevelFilter::Off);
+        }
+
+        complex_actions
+    }
+
+    pub fn apply_complex_actions(&mut self, actions: Vec<Action>) -> Result<(), Error> {
+        let config = self;
+        let mut rank_piped_api_domains = false;
+        let mut rank_invidious_api_domains = false;
+
+        for action in actions {
+            match action {
+                Action::RankPipedApiDomains => rank_piped_api_domains = true,
+                Action::RankInvidiousApiDomains => rank_invidious_api_domains = true,
+                _ => (),
+            }
+        }
+
+        if rank_piped_api_domains {
+            MusicPlayerOptions::rank_piped_api_domains(config)?;
+        }
+        if rank_invidious_api_domains {
+            MusicPlayerOptions::rank_invidious_api_domains(config)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -98,48 +177,32 @@ impl MusicPlayerOptions {
         options
     }
 
-    pub fn process_and_apply_args(
-        &self,
-        mut config: MusicPlayerConfig,
-        args: &[String],
-    ) -> Result<MusicPlayerConfig, Error> {
-        let mut rank_piped_api_domains = false;
-        let mut rank_invidious_api_domains = false;
+    pub fn extract_user_input_url(mut args: Vec<String>) -> (Vec<String>, Option<String>) {
+        let user_input: Option<String> = {
+            if args.len() > 1 && Source::is_valid_source_path(args.last().unwrap()) {
+                Some(args.pop().unwrap())
+            } else {
+                None
+            }
+        };
+
+        (args, user_input)
+    }
+
+    pub fn preprocess_args(&self, args: &[String]) -> Result<Vec<Action>, Error> {
+        let mut actions = Vec::new();
+
         for arg in args {
             let action = self.options.map_option_str_to_action(arg);
 
             log::info!("{:?} -> {:?}", arg, action);
-            if action.is_none() {
-                continue;
-            }
-            let action = action.unwrap();
-            match action {
-                Action::PrintHelp => {
-                    self.print_help();
-                    return Err(Error::PrintHelp);
-                }
-                Action::SetPipedApiDomainIndex(index) => config.piped_api_domain_index = index,
-                Action::SetShufflePlaylist(val) => config.shuffle_playlist = val,
-                Action::SetInvidiousApiDomainIndex(index) => {
-                    config.invidious_api_domain_index = index
-                }
-                Action::SetMpvBaseVolume(val) => config.mpv_base_volume = val,
-                Action::SetVideoDurationLimit(val) => config.video_duration_limit_s = val,
-                Action::SetDebugLog(val) => config.debug_log = val,
-                Action::SetPlayOnlyRecommendations(val) => config.play_only_recommendations = val,
-                Action::RankPipedApiDomains => rank_piped_api_domains = true,
-                Action::RankInvidiousApiDomains => rank_invidious_api_domains = true,
+
+            if let Some(action) = action {
+                actions.push(action);
             }
         }
 
-        if rank_piped_api_domains {
-            Self::rank_piped_api_domains(&mut config);
-        }
-        if rank_invidious_api_domains {
-            Self::rank_invidious_api_domains(&mut config);
-        }
-
-        Ok(config)
+        Ok(actions)
     }
 
     pub fn print_help(&self) {
@@ -153,7 +216,7 @@ impl MusicPlayerOptions {
             .for_each(|option| println!("  {option}"));
     }
 
-    pub fn rank_piped_api_domains(config: &mut MusicPlayerConfig) {
+    pub fn rank_piped_api_domains(config: &mut MusicPlayerConfig) -> Result<(), Error> {
         println!("Ranking Piped API domains: ");
         log::info!("MusicPlayerOptions::rank_piped_api_domains");
 
@@ -196,6 +259,11 @@ impl MusicPlayerOptions {
         }
         ranking.sort_by_key(|(_, elapsed)| elapsed.to_owned());
 
+        if ranking.is_empty() {
+            return Err(Error::AllPipedApiDomainsDown(
+                "All provided piped api domains are down".to_owned(),
+            ));
+        }
         config.piped_api_domains.clear();
         for piped_api_domain in ranking {
             config.piped_api_domains.push(piped_api_domain.0);
@@ -203,9 +271,12 @@ impl MusicPlayerOptions {
         config.piped_api_domain_index = 0;
 
         println!("Piped API domain set to: {}", config.piped_api_domains[0]);
+        log::info!("Piped API domain set to: {}", config.piped_api_domains[0]);
+
+        Ok(())
     }
 
-    pub fn rank_invidious_api_domains(config: &mut MusicPlayerConfig) {
+    pub fn rank_invidious_api_domains(config: &mut MusicPlayerConfig) -> Result<(), Error> {
         println!("Ranking Invidious API domains: ");
         log::info!("MusicPlayerOptions::rank_invidious_api_domains");
 
@@ -249,6 +320,11 @@ impl MusicPlayerOptions {
         }
         ranking.sort_by_key(|(_, elapsed)| elapsed.to_owned());
 
+        if ranking.is_empty() {
+            return Err(Error::AllInvidiousApiDomainsDown(
+                "All provided invidious api domains are down".to_owned(),
+            ));
+        }
         config.invidious_api_domains.clear();
         for invidious_api_domain in ranking {
             config.invidious_api_domains.push(invidious_api_domain.0);
@@ -263,5 +339,7 @@ impl MusicPlayerOptions {
             "Invidious API domain set to: {}",
             config.invidious_api_domains[0]
         );
+
+        Ok(())
     }
 }

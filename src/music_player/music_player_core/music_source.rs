@@ -47,6 +47,14 @@ impl Source {
             _ => Err(Error::OtherError("Not remote source".to_owned())),
         }
     }
+
+    pub fn is_valid_source_path(path: &str) -> bool {
+        let mut valid_path = false;
+        valid_path |= Remote::url_into_video_id(path).is_ok();
+        valid_path |= Remote::url_into_playlist_id(path).is_ok();
+
+        valid_path
+    }
 }
 
 impl Remote {
