@@ -20,30 +20,14 @@ pub struct MusicPlayer {
     tui: tui::MusicPlayerTUI,
     tui_input_handler: tui::user_input_handler::TUIUserInputHandler,
     music_player_os_interface: music_player_os_interface::MediaPlayerOSInterface,
-    logger: Option<logger::Logger>,
 }
 
 impl MusicPlayer {
-    pub fn new(args: &[String]) -> Self {
+    pub fn new(args: &[String], log_send: logger::LogSender) -> Self {
         let config: music_player_config::MusicPlayerConfig =
             music_player_config::MusicPlayerConfig::new().unwrap();
 
-        let mut logger = {
-            if config.debug_log {
-                Some(logger::Logger::new())
-            } else {
-                None
-            }
-        };
-        let log_send = {
-            if config.debug_log {
-                logger::LogSender::new(Some(logger.as_ref().unwrap().get_signal_send()))
-            } else {
-                logger::LogSender::new(None)
-            }
-        };
-
-        let config = music_player_config::MusicPlayerOptions::new(log_send.clone())
+        let config = music_player_config::MusicPlayerOptions::new()
             .process_and_apply_args(config, args)
             .map_err(|err| {
                 match err {
@@ -54,38 +38,26 @@ impl MusicPlayer {
             })
             .unwrap();
 
-        let log_send = {
-            if !config.debug_log {
-                logger = None;
-                logger::LogSender::new(None)
-            } else {
-                log_send
-            }
-        };
+        if !config.debug_log {
+            log::set_max_level(log::LevelFilter::Off);
+        }
 
-        let mut libmpv = libmpv_handlers::LibMpvHandler::initialize_libmpv(
-            config.mpv_base_volume,
-            log_send.clone(),
-        )
-        .unwrap();
+        let mut libmpv =
+            libmpv_handlers::LibMpvHandler::initialize_libmpv(config.mpv_base_volume).unwrap();
         let libmpv_signal_send = libmpv.create_signal_channel();
 
-        let mut music_player_tui =
-            tui::MusicPlayerTUI::setup_terminal(config.mpv_base_volume, log_send.clone());
+        let mut music_player_tui = tui::MusicPlayerTUI::setup_terminal(config.mpv_base_volume);
         let tui_signal_send = music_player_tui.create_signal_channel();
 
-        let mut tui_input_handler = tui::user_input_handler::TUIUserInputHandler::new(
-            config.mpv_base_volume,
-            log_send.clone(),
-        );
+        let mut tui_input_handler =
+            tui::user_input_handler::TUIUserInputHandler::new(config.mpv_base_volume);
         let tui_input_handler_send = tui_input_handler.create_signal_channel();
 
-        let mut music_player_logic =
-            music_player_core::MusicPlayerLogic::new(config, log_send.clone()).unwrap();
+        let mut music_player_logic = music_player_core::MusicPlayerLogic::new(config).unwrap();
         let mp_logic_signal_send = music_player_logic.create_signal_channel();
 
         let mut music_player_os_interface =
-            music_player_os_interface::MediaPlayerOSInterface::new(log_send.clone());
+            music_player_os_interface::MediaPlayerOSInterface::new();
         let os_interface_signal_send = music_player_os_interface.create_signal_channel();
 
         let libmpv_event_handler = libmpv_handlers::EventHandler::new(
@@ -116,7 +88,6 @@ impl MusicPlayer {
             tui: music_player_tui,
             tui_input_handler,
             music_player_os_interface,
-            logger,
         }
     }
 
@@ -137,10 +108,6 @@ impl MusicPlayer {
             });
             scope.spawn(|_| self.tui_input_handler.handle_user_input());
             scope.spawn(|_| self.music_player_os_interface.handle_signals());
-
-            if let Some(logger) = &self.logger {
-                scope.spawn(|_| logger.log());
-            }
         })
         .unwrap();
 

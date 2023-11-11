@@ -1,5 +1,4 @@
 use crate::music_player::libmpv_handlers::LibMpvSignals;
-use crate::music_player::logger;
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 use crate::music_player::tui::commands::{commands_registry::Action, TuiCommands};
 use crate::music_player::tui::TuiSignals;
@@ -21,12 +20,11 @@ pub struct TUIUserInputHandler {
     libmpv_signal_send: Option<crossbeam::channel::Sender<LibMpvSignals>>,
     tui_signal_send: Option<crossbeam::channel::Sender<TuiSignals>>,
     mp_logic_signal_send: Option<crossbeam::channel::Sender<MusicPlayerLogicSignals>>,
-    log_send: logger::LogSender,
     send_help_str: bool,
 }
 
 impl TUIUserInputHandler {
-    pub fn new(volume: i64, log_send: logger::LogSender) -> Self {
+    pub fn new(volume: i64) -> Self {
         Self {
             tui_state: TuiState::Player,
             enter_command_mode: false,
@@ -37,7 +35,6 @@ impl TUIUserInputHandler {
             libmpv_signal_send: None,
             tui_signal_send: None,
             mp_logic_signal_send: None,
-            log_send,
             send_help_str: true,
         }
     }
@@ -84,10 +81,7 @@ impl TUIUserInputHandler {
             } else {
                 if let Some(recv) = &self.tui_input_handler_signal_recv {
                     if let Ok(signal) = recv.try_recv() {
-                        self.log_send.send_log_message(format!(
-                            "TUIUserInputHandler::handle_user_input -> {:?}",
-                            signal
-                        ));
+                        log::info!("TUIUserInputHandler::handle_user_input -> {:?}", signal);
                         match signal {
                             TuiInputHandlerSignals::Quit => {
                                 break;
@@ -150,10 +144,7 @@ impl TUIUserInputHandler {
         let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
         let mp_logic_signal_send = self.mp_logic_signal_send.as_ref().unwrap();
 
-        self.log_send.send_log_message(format!(
-            "TUIUserInputHandler::handle_key_event -> {:?}",
-            action
-        ));
+        log::info!("TUIUserInputHandler::handle_key_event -> {:?}", action);
         match action {
             Action::Quit => {
                 mp_logic_signal_send

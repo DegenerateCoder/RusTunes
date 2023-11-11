@@ -1,4 +1,4 @@
-use crate::music_player::logger::{Error, LogSender};
+use crate::music_player::logger::Error;
 
 pub struct RemoteSourceProcessor {
     piped_api_domains: Vec<String>,
@@ -8,7 +8,6 @@ pub struct RemoteSourceProcessor {
     duration_limit: u64,
     piped_api_domain_index_start: usize,
     invidious_api_domain_index_start: usize,
-    log_send: LogSender,
     reqwest_client: reqwest::blocking::Client,
 }
 
@@ -95,7 +94,6 @@ impl RemoteSourceProcessor {
         invidious_api_domains: Vec<String>,
         invidious_api_domain_index: usize,
         duration_limit: u64,
-        log_send: crate::music_player::logger::LogSender,
     ) -> Result<Self, Error> {
         let reqwest_client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
@@ -109,7 +107,6 @@ impl RemoteSourceProcessor {
             duration_limit,
             piped_api_domain_index_start: piped_api_domain_index,
             invidious_api_domain_index_start: invidious_api_domain_index,
-            log_send,
             reqwest_client,
         })
     }
@@ -125,10 +122,10 @@ impl RemoteSourceProcessor {
                 "All piped api domains are unrechable".to_string(),
             ))
         } else {
-            self.log_send.send_log_message(format!(
+            log::info!(
                 "RemoteSourceProcessor::next_piped_api_domains_index -> {:?}",
                 self.get_piped_api_domain()
-            ));
+            );
             self.piped_api_domain_index = i;
             Ok(())
         }
@@ -146,10 +143,7 @@ impl RemoteSourceProcessor {
         let result = self._set_audio_url_title(source);
 
         if result.is_err() {
-            self.log_send.send_log_message(format!(
-                "RemoteSourceProcessor::->set_audio_url_title {:?}",
-                result
-            ));
+            log::info!("RemoteSourceProcessor::->set_audio_url_title {:?}", result);
         }
 
         Ok(result?)
@@ -192,16 +186,10 @@ impl RemoteSourceProcessor {
         let mut result = self._get_video_genre(source);
 
         while result.is_err() {
-            self.log_send.send_log_message(format!(
-                "RemoteSourceProcessor::->get_video_genre {:?}",
-                result
-            ));
+            log::info!("RemoteSourceProcessor::->get_video_genre {:?}", result);
             let update = self.next_invidious_api_domains_index();
             if update.is_err() {
-                self.log_send.send_log_message(format!(
-                    "RemoteSourceProcessor::->get_video_genre {:?}",
-                    update
-                ));
+                log::info!("RemoteSourceProcessor::->get_video_genre {:?}", update);
                 return Err(update.unwrap_err());
             }
             result = self._get_video_genre(source);
@@ -234,22 +222,22 @@ impl RemoteSourceProcessor {
         video_id: &str,
         played_video_ids: &Vec<String>,
     ) -> Result<Source, Error> {
-        self.log_send.send_log_message(format!(
+        log::info!(
             "RemoteSourceProcessor::get_related_video_url -> {:?}",
             video_id
-        ));
+        );
 
         let result = self._get_related_video_source(video_id, played_video_ids);
 
         if result.is_err() {
-            self.log_send.send_log_message(format!(
+            log::info!(
                 "RemoteSourceProcessor::get_related_video_url -> Error: {:?}",
                 result
-            ));
+            );
         }
 
         if result.is_ok() {
-            self.log_send.send_log_message(format!(
+            log::info!(
                 "RemoteSourceProcessor::get_related_video_url -> {:?} => {:?}",
                 video_id,
                 result
@@ -258,7 +246,7 @@ impl RemoteSourceProcessor {
                     .get_remote_source()
                     .unwrap()
                     .video_id
-            ));
+            );
         }
 
         Ok(result?)
@@ -335,10 +323,10 @@ impl RemoteSourceProcessor {
         let result = self._playlist_to_remote_vec(playlist_id);
 
         if result.is_err() {
-            self.log_send.send_log_message(format!(
+            log::info!(
                 "RemoteSourceProcessor::playlist_to_remote_vec -> {:?}",
                 result
-            ));
+            );
         }
 
         Ok(result?)
@@ -394,10 +382,10 @@ impl RemoteSourceProcessor {
         let result = self._fetch_piped_api_domains();
 
         if result.is_err() {
-            self.log_send.send_log_message(format!(
+            log::info!(
                 "RemoteSourceProcessor::fetch_piped_api_domains -> {:?}",
                 result
-            ));
+            );
         }
 
         Ok(result?)
@@ -426,10 +414,10 @@ impl RemoteSourceProcessor {
             self.piped_api_domain_index_start = 0;
         }
 
-        self.log_send.send_log_message(format!(
+        log::info!(
             "RemoteSourceProcessor::fetch_piped_api_domains -> {:?}",
             self.get_piped_api_domain()
-        ));
+        );
 
         Ok(())
     }
@@ -438,10 +426,10 @@ impl RemoteSourceProcessor {
         let result = self._fetch_invidious_api_domains();
 
         if result.is_err() {
-            self.log_send.send_log_message(format!(
+            log::info!(
                 "RemoteSourceProcessor::fetch_invidious_api_domains -> {:?}",
                 result
-            ));
+            );
         }
 
         Ok(result?)
@@ -484,10 +472,10 @@ impl RemoteSourceProcessor {
             self.invidious_api_domain_index_start = 0;
         }
 
-        self.log_send.send_log_message(format!(
+        log::info!(
             "RemoteSourceProcessor::fetch_invidious_api_domains -> {:?}",
             self.get_invidious_api_domain()
-        ));
+        );
 
         Ok(())
     }
@@ -503,10 +491,10 @@ impl RemoteSourceProcessor {
                 "All invidious api domains are unrechable".to_string(),
             ))
         } else {
-            self.log_send.send_log_message(format!(
+            log::info!(
                 "RemoteSourceProcessor::next_invidious_api_domains_index -> {:?}",
                 self.get_invidious_api_domain()
-            ));
+            );
             self.invidious_api_domain_index = i;
             Ok(())
         }

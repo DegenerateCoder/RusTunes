@@ -1,5 +1,4 @@
 use crate::music_player::logger::Error;
-use crate::music_player::logger::{LogSender, Logger};
 use crate::music_player::tui::commands::commands_registry::Arg;
 mod options_registry;
 use options_registry::{Action, OptionDefinition, OptionType, OptionsRegistry};
@@ -32,14 +31,12 @@ impl MusicPlayerConfig {
 
 pub struct MusicPlayerOptions {
     options: OptionsRegistry,
-    log_send: LogSender,
 }
 
 impl MusicPlayerOptions {
-    pub fn new(log_send: LogSender) -> Self {
+    pub fn new() -> Self {
         Self {
             options: Self::init_options(),
-            log_send,
         }
     }
 
@@ -110,8 +107,8 @@ impl MusicPlayerOptions {
         let mut rank_invidious_api_domains = false;
         for arg in args {
             let action = self.options.map_option_str_to_action(arg);
-            self.log_send
-                .send_log_message(format!("{:?} -> {:?}", arg, action));
+
+            log::info!("{:?} -> {:?}", arg, action);
             if action.is_none() {
                 continue;
             }
@@ -157,13 +154,8 @@ impl MusicPlayerOptions {
     }
 
     pub fn rank_piped_api_domains(config: &mut MusicPlayerConfig) {
-        let logging_enabled = config.debug_log;
         println!("Ranking Piped API domains: ");
-        Logger::conditional_log(
-            &format!("MusicPlayerOptions::rank_piped_api_domains"),
-            logging_enabled,
-        )
-        .unwrap();
+        log::info!("MusicPlayerOptions::rank_piped_api_domains");
 
         let ranking_queue = crossbeam::queue::ArrayQueue::new(config.piped_api_domains.len());
 
@@ -184,21 +176,14 @@ impl MusicPlayerOptions {
                     let response = reqwest_client.execute(request);
                     if response.is_ok() {
                         let elapsed = start.elapsed().unwrap().as_millis();
+
                         println!("\t{piped_api_domain}: {elapsed}ms");
-                        Logger::conditional_log(
-                            &format!("\t{piped_api_domain}: {elapsed}ms"),
-                            logging_enabled,
-                        )
-                        .unwrap();
+                        log::info!("\t{piped_api_domain}: {elapsed}ms");
 
                         ranking_queue.push((piped_api_domain, elapsed)).unwrap();
                     } else {
                         println!("\t{piped_api_domain}: ERROR");
-                        Logger::conditional_log(
-                            &format!("\t{piped_api_domain}: {:?}", response.err()),
-                            logging_enabled,
-                        )
-                        .unwrap();
+                        log::info!("\t{piped_api_domain}: {:?}", response.err());
                     }
                 });
             }
@@ -221,13 +206,8 @@ impl MusicPlayerOptions {
     }
 
     pub fn rank_invidious_api_domains(config: &mut MusicPlayerConfig) {
-        let logging_enabled = config.debug_log;
         println!("Ranking Invidious API domains: ");
-        Logger::conditional_log(
-            &format!("MusicPlayerOptions::rank_invidious_api_domains"),
-            logging_enabled,
-        )
-        .unwrap();
+        log::info!("MusicPlayerOptions::rank_invidious_api_domains");
 
         let ranking_queue = crossbeam::queue::ArrayQueue::new(config.invidious_api_domains.len());
 
@@ -249,21 +229,14 @@ impl MusicPlayerOptions {
                     let response = reqwest_client.execute(request);
                     if response.is_ok() {
                         let elapsed = start.elapsed().unwrap().as_millis();
+
                         println!("\t{invidious_api_domain}: {elapsed}ms");
-                        Logger::conditional_log(
-                            &format!("\t{invidious_api_domain}: {elapsed}ms"),
-                            logging_enabled,
-                        )
-                        .unwrap();
+                        log::info!("\t{invidious_api_domain}: {elapsed}ms");
 
                         ranking_queue.push((invidious_api_domain, elapsed)).unwrap();
                     } else {
                         println!("\t{invidious_api_domain}: ERROR");
-                        Logger::conditional_log(
-                            &format!("\t{invidious_api_domain}: {:?}", response.err()),
-                            logging_enabled,
-                        )
-                        .unwrap();
+                        log::info!("\t{invidious_api_domain}: {:?}", response.err());
                     }
                 });
             }
@@ -286,13 +259,9 @@ impl MusicPlayerOptions {
             "Invidious API domain set to: {}",
             config.invidious_api_domains[0]
         );
-        Logger::conditional_log(
-            &format!(
-                "Invidious API domain set to: {}",
-                config.invidious_api_domains[0]
-            ),
-            logging_enabled,
-        )
-        .unwrap();
+        log::info!(
+            "Invidious API domain set to: {}",
+            config.invidious_api_domains[0]
+        );
     }
 }

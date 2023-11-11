@@ -18,11 +18,10 @@ const MPV_ERROR_LOADING_FAILED: libmpv::Error = libmpv::Error::Raw(-13);
 pub struct LibMpvHandler {
     mpv: libmpv::Mpv,
     libmpv_signal_recv: Option<crossbeam::channel::Receiver<LibMpvSignals>>,
-    log_send: LogSender,
 }
 
 impl LibMpvHandler {
-    pub fn initialize_libmpv(volume: i64, log_send: LogSender) -> Result<Self, libmpv::Error> {
+    pub fn initialize_libmpv(volume: i64) -> Result<Self, libmpv::Error> {
         let mpv = libmpv::Mpv::new()?;
         mpv.set_property("volume", volume)?;
         mpv.set_property("vo", "null")?;
@@ -32,7 +31,6 @@ impl LibMpvHandler {
         Ok(LibMpvHandler {
             mpv,
             libmpv_signal_recv,
-            log_send,
         })
     }
 
@@ -59,8 +57,7 @@ impl LibMpvHandler {
         loop {
             if let Some(recv) = &self.libmpv_signal_recv {
                 if let Ok(signal) = recv.recv() {
-                    self.log_send
-                        .send_log_message(format!("LibMpvHandler::handle_signals -> {:?}", signal));
+                    log::info!("LibMpvHandler::handle_signals -> {:?}", signal);
                     match signal {
                         LibMpvSignals::AddAudio(source) => {
                             self.mpv
@@ -124,20 +121,14 @@ impl EventHandler {
 
             match ev {
                 Ok(event) => {
-                    self.log_send.send_log_message(format!(
-                        "EventHandler::libmpv_event_handling -> {:?}",
-                        event
-                    ));
+                    log::info!("EventHandler::libmpv_event_handling -> {:?}", event);
                     let end = self.handle_event(event);
                     if end {
                         break;
                     }
                 }
                 Err(err) => {
-                    self.log_send.send_log_message(format!(
-                        "EventHandler::libmpv_event_handling -> Error::{:?}",
-                        err
-                    ));
+                    log::info!("EventHandler::libmpv_event_handling -> Error::{:?}", err);
 
                     match err {
                         MPV_ERROR_LOADING_FAILED => {

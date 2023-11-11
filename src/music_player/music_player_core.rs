@@ -1,7 +1,7 @@
 pub mod music_source;
 
 use crate::music_player::libmpv_handlers::LibMpvSignals;
-use crate::music_player::logger::{Error, LogSender};
+use crate::music_player::logger::Error;
 use crate::music_player::music_player_config::MusicPlayerConfig;
 use crate::music_player::music_player_os_interface::OSInterfaceSignals;
 use crate::music_player::tui::{user_input_handler::TuiInputHandlerSignals, TuiSignals};
@@ -36,11 +36,10 @@ pub struct MusicPlayerLogic {
     mp_logic_signal_recv: Option<crossbeam::channel::Receiver<MusicPlayerLogicSignals>>,
     signals_senders: SignalSendersCollection,
     play_only_recommendations: bool,
-    log_send: LogSender,
 }
 
 impl MusicPlayerLogic {
-    pub fn new(config: MusicPlayerConfig, log_send: LogSender) -> Result<Self, Error> {
+    pub fn new(config: MusicPlayerConfig) -> Result<Self, Error> {
         Ok(MusicPlayerLogic {
             to_play: Vec::new(),
             to_play_index: 0,
@@ -54,7 +53,6 @@ impl MusicPlayerLogic {
                 config.invidious_api_domains,
                 config.invidious_api_domain_index,
                 config.video_duration_limit_s,
-                log_send.clone(),
             )?,
             mp_logic_signal_recv: None,
             signals_senders: SignalSendersCollection {
@@ -64,7 +62,6 @@ impl MusicPlayerLogic {
                 tui_input_handler: None,
             },
             play_only_recommendations: config.play_only_recommendations,
-            log_send,
         })
     }
 
@@ -148,10 +145,7 @@ impl MusicPlayerLogic {
         loop {
             if let Some(recv) = &self.mp_logic_signal_recv {
                 if let Ok(signal) = recv.recv() {
-                    self.log_send.send_log_message(format!(
-                        "MusicPlayerLogic::handle_playback_logic -> {:?}",
-                        signal
-                    ));
+                    log::info!("MusicPlayerLogic::handle_playback_logic -> {:?}", signal);
                     let os_interface_signal_send =
                         self.signals_senders.os_interface.as_ref().unwrap();
                     match signal {
@@ -216,10 +210,11 @@ impl MusicPlayerLogic {
         let broken_music_source = self.to_play.get_mut(broken_index).unwrap();
         let broken_remote_src = broken_music_source.get_remote_source_mut()?;
 
-        self.log_send.send_log_message(format!(
+        log::info!(
             "MusicPlayerLogic::fix_broken_url -> {:?}::{:?}",
-            broken_remote_src.video_id, broken_remote_src.title
-        ));
+            broken_remote_src.video_id,
+            broken_remote_src.title
+        );
 
         let mut music_source = music_source::Source::new_remote(&broken_remote_src.url).unwrap();
 
@@ -227,7 +222,6 @@ impl MusicPlayerLogic {
             &mut music_source,
             &mut self.remote_src_proc,
             &self.signals_senders,
-            &self.log_send,
         )?;
 
         let broken_music_source = self.to_play.get_mut(broken_index).unwrap();
@@ -243,10 +237,11 @@ impl MusicPlayerLogic {
         let music_source = self.to_play.get_mut(self.to_play_index).unwrap();
         let remote_src = music_source.get_remote_source_mut()?;
 
-        self.log_send.send_log_message(format!(
+        log::info!(
             "MusicPlayerLogic::update_tui_data -> {:?}::{:?}",
-            remote_src.video_id, remote_src.title
-        ));
+            remote_src.video_id,
+            remote_src.title
+        );
 
         let remote_src = music_source.get_remote_source_mut()?;
         tui_signal_send
@@ -272,8 +267,7 @@ impl MusicPlayerLogic {
     }
 
     fn prepare_next_to_play(&mut self) -> Result<(), Error> {
-        self.log_send
-            .send_log_message(format!("MusicPlayerLogic::prepare_next_to_play",));
+        log::info!("MusicPlayerLogic::prepare_next_to_play",);
 
         let find_related_source = self.to_play_index == self.to_play.len();
         if find_related_source {
@@ -284,10 +278,10 @@ impl MusicPlayerLogic {
         let next_to_play_src = self.to_play.get_mut(self.to_play_index).unwrap();
         let next_to_play = next_to_play_src.get_remote_source_mut().unwrap();
 
-        self.log_send.send_log_message(format!(
+        log::info!(
             "MusicPlayerLogic::prepare_next_to_play -> {:?}",
             next_to_play.video_id
-        ));
+        );
 
         let played = self.played_video_ids.contains(&next_to_play.video_id);
         if !played {
@@ -303,7 +297,6 @@ impl MusicPlayerLogic {
                 next_to_play_src,
                 &mut self.remote_src_proc,
                 &self.signals_senders,
-                &self.log_send,
             )?;
             let next_to_play = next_to_play_src.get_remote_source_mut().unwrap();
             let libmpv_signal_send = self.signals_senders.libmpv.as_ref().unwrap();
@@ -321,10 +314,10 @@ impl MusicPlayerLogic {
         let related_video_id = self.related_queue.pop_front().unwrap();
         self.related_queue.push_back(related_video_id.clone());
 
-        self.log_send.send_log_message(format!(
+        log::info!(
             "MusicPlayerLogic::find_related_source -> {:?}",
             related_video_id
-        ));
+        );
 
         let mut related_source = self
             .remote_src_proc
@@ -335,7 +328,6 @@ impl MusicPlayerLogic {
                 Error::AllInvidiousApiDomainsDown(_) => Self::invidious_api_domains_error(
                     &mut self.remote_src_proc,
                     &self.signals_senders,
-                    &self.log_send,
                 )?,
                 _ => self.handle_piped_api_domain_update()?,
             }
@@ -352,18 +344,18 @@ impl MusicPlayerLogic {
         music_src: &mut music_source::Source,
         remote_src_proc: &mut music_source::RemoteSourceProcessor,
         signals_senders: &SignalSendersCollection,
-        log_send: &LogSender,
     ) -> Result<(), Error> {
         let remote_src = music_src.get_remote_source_mut().unwrap();
-        log_send.send_log_message(format!(
+        log::info!(
             "MusicPlayerLogic::prepare_source -> {:?}::{:?}",
-            remote_src.video_id, remote_src.title
-        ));
+            remote_src.video_id,
+            remote_src.title
+        );
 
         let error = Self::prepare_source_impl(music_src, remote_src_proc);
 
         if let Err(_err) = error {
-            Self::piped_api_domains_error(remote_src_proc, signals_senders, log_send)?;
+            Self::piped_api_domains_error(remote_src_proc, signals_senders)?;
             Self::prepare_source_impl(music_src, remote_src_proc)?;
         }
 
@@ -386,14 +378,13 @@ impl MusicPlayerLogic {
     fn invidious_api_domains_error(
         remote_src_proc: &mut music_source::RemoteSourceProcessor,
         signals_senders: &SignalSendersCollection,
-        log_send: &LogSender,
     ) -> Result<(), Error> {
         let libmpv_signal_send = signals_senders.libmpv.as_ref().unwrap();
         let os_interface_signal_send = signals_senders.os_interface.as_ref().unwrap();
         let tui_signal_send = signals_senders.tui.as_ref().unwrap();
         let tui_input_handler_send = signals_senders.tui_input_handler.as_ref().unwrap();
 
-        log_send.send_log_message(format!("MusicPlayerLogic::invidious_api_domains_error"));
+        log::info!("MusicPlayerLogic::invidious_api_domains_error");
 
         let result = remote_src_proc.fetch_invidious_api_domains();
         if result.is_err() {
@@ -413,14 +404,13 @@ impl MusicPlayerLogic {
     fn piped_api_domains_error(
         remote_src_proc: &mut music_source::RemoteSourceProcessor,
         signals_senders: &SignalSendersCollection,
-        log_send: &LogSender,
     ) -> Result<(), Error> {
         let libmpv_signal_send = signals_senders.libmpv.as_ref().unwrap();
         let os_interface_signal_send = signals_senders.os_interface.as_ref().unwrap();
         let tui_signal_send = signals_senders.tui.as_ref().unwrap();
         let tui_input_handler_send = signals_senders.tui_input_handler.as_ref().unwrap();
 
-        log_send.send_log_message(format!("MusicPlayerLogic::piped_api_domains_error"));
+        log::info!("MusicPlayerLogic::piped_api_domains_error");
 
         let result = remote_src_proc.fetch_piped_api_domains();
         if result.is_err() {
@@ -440,11 +430,7 @@ impl MusicPlayerLogic {
     fn handle_piped_api_domain_update(&mut self) -> Result<(), Error> {
         let next_index_result = self.remote_src_proc.next_piped_api_domains_index();
         if next_index_result.is_err() {
-            Self::piped_api_domains_error(
-                &mut self.remote_src_proc,
-                &self.signals_senders,
-                &self.log_send,
-            )?;
+            Self::piped_api_domains_error(&mut self.remote_src_proc, &self.signals_senders)?;
         }
 
         Ok(())

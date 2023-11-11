@@ -34,29 +34,28 @@ impl From<serde_json::Error> for Error {
 
 #[derive(Clone)]
 pub struct LogSender {
-    sender: Option<crossbeam::channel::Sender<LogSignals>>,
+    sender: crossbeam::channel::Sender<LogSignals>,
 }
 
+#[derive(Debug)]
 pub enum LogSignals {
     Message(String),
     Quit,
 }
 
 impl LogSender {
-    pub fn new(sender: Option<crossbeam::channel::Sender<LogSignals>>) -> Self {
+    pub fn new(sender: crossbeam::channel::Sender<LogSignals>) -> Self {
         Self { sender }
     }
 
     pub fn send_log_message(&self, msg: String) {
-        if let Some(send) = &self.sender {
-            send.send(LogSignals::Message(msg)).unwrap();
-        }
+        let send = &self.sender;
+        send.send(LogSignals::Message(msg)).unwrap();
     }
 
     pub fn send_quit_signal(&self) {
-        if let Some(send) = &self.sender {
-            send.send(LogSignals::Quit).unwrap();
-        }
+        let send = &self.sender;
+        send.send(LogSignals::Quit).unwrap();
     }
 }
 
@@ -99,8 +98,7 @@ impl Logger {
             .open("log.txt")
             .unwrap();
 
-        let timestamp = chrono::Utc::now();
-        writeln!(log_file, "{}: {}", timestamp, message)?;
+        writeln!(log_file, "{}", message)?;
 
         Ok(())
     }
@@ -118,4 +116,33 @@ impl Logger {
         }
         Ok(())
     }
+
+    pub fn flush(&self) -> Result<(), Error> {
+        let recv = &self.logger_signal_recv;
+        for _i in 0..recv.len() {
+            let signal = recv.recv().unwrap();
+            match signal {
+                LogSignals::Message(msg) => self.log_to_file(&msg)?,
+                _ => (),
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl log::Log for LogSender {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.target().starts_with("rustunes")
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            let timestamp = chrono::Utc::now();
+            let msg = format!("{} {}: {}", timestamp, record.level(), record.args());
+            self.send_log_message(msg.to_owned());
+        }
+    }
+
+    fn flush(&self) {}
 }
