@@ -20,11 +20,12 @@ fn main() {
     let music_player_options = MusicPlayerOptions::new();
     let options = music_player_options.preprocess_args(args).unwrap();
 
-    if user_input.is_none() || options.contains(&Action::PrintHelp) {
+    let overwrite_config = options.contains(&Action::OverwriteConfig);
+
+    if options.contains(&Action::PrintHelp) || (user_input.is_none() && !overwrite_config) {
         MusicPlayerOptions::new().print_help();
         return;
     }
-    let user_input = user_input.unwrap();
 
     let config = MusicPlayerConfig::new().map_err(|err| {
         println!("{:?}", err);
@@ -43,9 +44,20 @@ fn main() {
                     log_send.send_quit_signal();
                     err
                 })?;
-                let mut music_player = MusicPlayer::new(config, log_send);
-                music_player.play(&user_input);
 
+                config.overwrite_config(overwrite_config).map_err(|err| {
+                    println!("{:?}", err);
+                    log::error!("{:?}", err);
+                    log_send.send_quit_signal();
+                    err
+                })?;
+
+                if let Some(user_input) = user_input {
+                    let mut music_player = MusicPlayer::new(config, log_send);
+                    music_player.play(&user_input);
+                } else {
+                    log_send.send_quit_signal();
+                }
                 Ok(())
             });
             if debug_log {

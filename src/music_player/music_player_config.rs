@@ -4,7 +4,7 @@ pub mod options_registry;
 use crate::music_player::music_player_core::music_source::Source;
 use options_registry::{Action, OptionDefinition, OptionType, OptionsRegistry};
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct MusicPlayerConfig {
     pub piped_api_domains: Vec<String>,
     pub piped_api_domain_index: usize,
@@ -70,6 +70,7 @@ impl MusicPlayerConfig {
                 Action::SetDebugLog(val) => config.debug_log = val,
                 Action::SetPlayOnlyRecommendations(val) => config.play_only_recommendations = val,
                 Action::PrintHelp => (),
+                Action::OverwriteConfig => (),
                 Action::RankPipedApiDomains => complex_actions.push(Action::RankPipedApiDomains),
                 Action::RankInvidiousApiDomains => {
                     complex_actions.push(Action::RankInvidiousApiDomains)
@@ -121,6 +122,18 @@ impl MusicPlayerConfig {
         if rank_invidious_api_domains {
             MusicPlayerOptions::rank_invidious_api_domains(config)?;
         }
+
+        Ok(())
+    }
+
+    pub fn overwrite_config(&self, override_conf: bool) -> Result<(), Error> {
+        if !override_conf {
+            return Ok(());
+        }
+        let conf_json = serde_json::to_string_pretty(&self)?;
+        println!("Overwriting config: \n{conf_json}");
+        log::info!("MusicPlayerConfig::overwrite_config: \n{conf_json}");
+        std::fs::write("conf.json", conf_json)?;
 
         Ok(())
     }
@@ -200,6 +213,11 @@ impl MusicPlayerOptions {
                 option_type: OptionType::FetchInvidiousApiDomains,
                 args: vec![],
             },
+            OptionDefinition {
+                name: "--overwrite_config".to_string(),
+                option_type: OptionType::OverwriteConfig,
+                args: vec![],
+            },
         ]);
 
         options
@@ -235,6 +253,7 @@ impl MusicPlayerOptions {
 
     pub fn print_help(&self) {
         println!("Usage: rustunes [OPTIONS] URL");
+        println!("       rustunes --overwrite_config [OPTIONS]");
         println!("");
         println!("Options:");
 

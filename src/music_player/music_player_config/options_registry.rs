@@ -92,6 +92,7 @@ impl OptionsRegistry {
             OptionType::RankInvidiousApiDomains => Action::RankInvidiousApiDomains,
             OptionType::FetchPipedApiDomains => Action::FetchPipedApiDomains,
             OptionType::FetchInvidiousApiDomains => Action::FetchInvidiousApiDomains,
+            OptionType::OverwriteConfig => Action::OverwriteConfig,
         };
 
         Some(action_with_args)
@@ -152,6 +153,7 @@ pub enum OptionType {
     RankInvidiousApiDomains,
     FetchPipedApiDomains,
     FetchInvidiousApiDomains,
+    OverwriteConfig,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -168,4 +170,5 @@ pub enum Action {
     RankInvidiousApiDomains,
     FetchPipedApiDomains,
     FetchInvidiousApiDomains,
+    OverwriteConfig,
 }
