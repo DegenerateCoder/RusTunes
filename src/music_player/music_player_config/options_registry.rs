@@ -90,6 +90,8 @@ impl OptionsRegistry {
             OptionType::SetDebugLog => Action::SetDebugLog(processed_args.pop()?.extract_bool()?),
             OptionType::RankPipedApiDomains => Action::RankPipedApiDomains,
             OptionType::RankInvidiousApiDomains => Action::RankInvidiousApiDomains,
+            OptionType::FetchPipedApiDomains => Action::FetchPipedApiDomains,
+            OptionType::FetchInvidiousApiDomains => Action::FetchInvidiousApiDomains,
         };
 
         Some(action_with_args)
@@ -148,6 +150,8 @@ pub enum OptionType {
     SetVideoDurationLimit,
     RankPipedApiDomains,
     RankInvidiousApiDomains,
+    FetchPipedApiDomains,
+    FetchInvidiousApiDomains,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -162,4 +166,6 @@ pub enum Action {
     SetVideoDurationLimit(u64),
     RankPipedApiDomains,
     RankInvidiousApiDomains,
+    FetchPipedApiDomains,
+    FetchInvidiousApiDomains,
 }

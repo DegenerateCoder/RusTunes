@@ -54,7 +54,6 @@ fn main() {
         })
         .unwrap();
         if debug_log {
-            log::info!("FLUSH:");
             logger.flush().unwrap();
         }
     }

@@ -74,6 +74,10 @@ impl MusicPlayerConfig {
                 Action::RankInvidiousApiDomains => {
                     complex_actions.push(Action::RankInvidiousApiDomains)
                 }
+                Action::FetchPipedApiDomains => complex_actions.push(Action::FetchPipedApiDomains),
+                Action::FetchInvidiousApiDomains => {
+                    complex_actions.push(Action::FetchInvidiousApiDomains)
+                }
             }
         }
 
@@ -88,15 +92,29 @@ impl MusicPlayerConfig {
         let config = self;
         let mut rank_piped_api_domains = false;
         let mut rank_invidious_api_domains = false;
+        let mut fetch_piped_api_domains = false;
+        let mut fetch_invidious_api_domains = false;
 
         for action in actions {
             match action {
                 Action::RankPipedApiDomains => rank_piped_api_domains = true,
                 Action::RankInvidiousApiDomains => rank_invidious_api_domains = true,
+                Action::FetchPipedApiDomains => fetch_piped_api_domains = true,
+                Action::FetchInvidiousApiDomains => fetch_invidious_api_domains = true,
                 _ => (),
             }
         }
 
+        if fetch_piped_api_domains {
+            let piped_api_domains = MusicPlayerOptions::fetch_piped_api_domains()?;
+            config.piped_api_domains = piped_api_domains;
+            config.piped_api_domain_index = 0;
+        }
+        if fetch_invidious_api_domains {
+            let invidious_api_domains = MusicPlayerOptions::fetch_invidious_api_domains()?;
+            config.invidious_api_domains = invidious_api_domains;
+            config.invidious_api_domain_index = 0;
+        }
         if rank_piped_api_domains {
             MusicPlayerOptions::rank_piped_api_domains(config)?;
         }
@@ -170,6 +188,16 @@ impl MusicPlayerOptions {
             OptionDefinition {
                 name: "--rank_invidious_api_domains".to_string(),
                 option_type: OptionType::RankInvidiousApiDomains,
+                args: vec![],
+            },
+            OptionDefinition {
+                name: "--fetch_piped_api_domains".to_string(),
+                option_type: OptionType::FetchPipedApiDomains,
+                args: vec![],
+            },
+            OptionDefinition {
+                name: "--fetch_invidious_api_domains".to_string(),
+                option_type: OptionType::FetchInvidiousApiDomains,
                 args: vec![],
             },
         ]);
@@ -341,5 +369,91 @@ impl MusicPlayerOptions {
         );
 
         Ok(())
+    }
+
+    pub fn fetch_piped_api_domains() -> Result<Vec<String>, Error> {
+        println!("Fetching Piped API domains: ");
+        log::info!("MusicPlayerOptions::fetch_piped_api_domains");
+        let mut piped_api_domains = Vec::new();
+
+        let request_url = "https://piped-instances.kavin.rocks/";
+        let reqwest_client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let request = reqwest_client.get(request_url).build()?;
+        let response: serde_json::Value = reqwest_client.execute(request)?.json()?;
+
+        let instances = response
+            .as_array()
+            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+
+        for instance in instances {
+            let api_url = instance
+                .get("api_url")
+                .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+            let api_url = api_url.as_str().unwrap();
+
+            println!("\t{}: {api_url}", piped_api_domains.len());
+            log::info!("\t{}: {api_url}", piped_api_domains.len());
+
+            piped_api_domains.push(api_url.to_string());
+        }
+
+        log::info!(
+            "MusicPlayerOptions::fetch_piped_api_domains -> {:?}",
+            piped_api_domains
+        );
+        Ok(piped_api_domains)
+    }
+
+    pub fn fetch_invidious_api_domains() -> Result<Vec<String>, Error> {
+        println!("Fetching Invidious API domains: ");
+        log::info!("MusicPlayerOptions::fetch_invidious_api_domains");
+        let mut invidious_api_domains = Vec::new();
+
+        let request_url = "https://api.invidious.io/instances.json?pretty=0&sort_by=type,health";
+        let reqwest_client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let request = reqwest_client.get(request_url).build()?;
+        let response: serde_json::Value = reqwest_client.execute(request)?.json()?;
+
+        let instances = response
+            .as_array()
+            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+
+        for instance in instances {
+            let instance_data = instance
+                .get(1)
+                .ok_or_else(|| Error::OtherError(format!("{:?}", instance.to_string())))?;
+            let api = instance_data
+                .get("api")
+                .ok_or_else(|| Error::OtherError(format!("{:?}", instance.to_string())))?
+                .as_bool();
+            if let Some(api) = api {
+                if !api {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+            let api_url = instance_data
+                .get("uri")
+                .ok_or_else(|| Error::OtherError(format!("{:?}", instance.to_string())))?;
+            let api_url = api_url.as_str().unwrap();
+
+            println!("\t{}: {api_url}", invidious_api_domains.len());
+            log::info!("\t{}: {api_url}", invidious_api_domains.len());
+
+            invidious_api_domains.push(api_url.to_string());
+        }
+
+        log::info!(
+            "MusicPlayerOptions::fetch_invidious_api_domains -> {:?}",
+            invidious_api_domains
+        );
+        Ok(invidious_api_domains)
     }
 }
