@@ -15,10 +15,17 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     let (args, user_input) = MusicPlayerOptions::extract_user_input_url(args);
-    let args = &args[..];
+    let args = &args[1..];
 
     let music_player_options = MusicPlayerOptions::new();
-    let options = music_player_options.preprocess_args(args).unwrap();
+    let options = music_player_options
+        .preprocess_args(args)
+        .map_err(|err| match err {
+            logger::Error::InvalidOption(msg) => println!("{msg}\n"),
+            _ => println!("{:?}", err),
+        })
+        .or::<Result<Vec<Action>, logger::Error>>(Ok(vec![Action::PrintHelp]))
+        .unwrap();
 
     let overwrite_config = options.contains(&Action::OverwriteConfig);
 

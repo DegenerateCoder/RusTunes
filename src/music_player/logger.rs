@@ -12,6 +12,7 @@ pub enum Error {
     OtherError(String),
     SerdeJSONError(serde_json::Error),
     PrintHelp,
+    InvalidOption(String),
 }
 
 impl From<reqwest::Error> for Error {

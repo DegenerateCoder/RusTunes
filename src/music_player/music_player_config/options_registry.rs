@@ -137,6 +137,10 @@ impl OptionsRegistry {
 
         help_str.join("\n")
     }
+
+    pub fn get_options_names(&self) -> Vec<&String> {
+        self.options.keys().collect()
+    }
 }
 
 #[derive(Debug)]

@@ -245,10 +245,33 @@ impl MusicPlayerOptions {
 
             if let Some(action) = action {
                 actions.push(action);
+            } else {
+                let invalid_arg = arg.split('=').next().unwrap();
+                let suggestion = self.find_suggestion(invalid_arg);
+                return Err(Error::InvalidOption(format!(
+                    "rustunes: '{invalid_arg}' is not a valid rustunes option.\nDid you mean: {suggestion}"
+                )));
             }
         }
 
         Ok(actions)
+    }
+
+    pub fn find_suggestion(&self, invalid_arg: &str) -> &str {
+        let a = invalid_arg;
+        let mut min_lev_distances = u8::MAX;
+        let mut suggestion = "";
+
+        let options_names = self.options.get_options_names();
+        for b in options_names {
+            let lev_dist = lev(a, b);
+            if lev_dist < min_lev_distances {
+                min_lev_distances = lev_dist;
+                suggestion = b;
+            }
+        }
+
+        suggestion
     }
 
     pub fn print_help(&self) {
@@ -475,4 +498,38 @@ impl MusicPlayerOptions {
         );
         Ok(invidious_api_domains)
     }
+}
+
+// https://en.wikipedia.org/wiki/Levenshtein_distance
+pub fn lev(a: &str, b: &str) -> u8 {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut v0 = vec![0usize; a.len() + 1];
+    let mut v1 = vec![0usize; a.len() + 1];
+
+    for (i, v) in v0.iter_mut().enumerate() {
+        *v = i;
+    }
+
+    for y in 1..=b.len() {
+        v1[0] = v0[0] + 1;
+
+        for x in 1..v0.len() {
+            if b[y - 1] == a[x - 1] {
+                v1[x] = v0[x - 1] + 0;
+            } else {
+                let mut lev = [0usize; 3];
+                lev[0] = v0[x];
+                lev[1] = v0[x - 1];
+                lev[2] = v1[x - 1];
+                let min_lev = lev.iter().min().unwrap().to_owned();
+                v1[x] = 1 + min_lev;
+            }
+        }
+
+        v0 = v1;
+        v1 = vec![0usize; a.len() + 1];
+    }
+
+    v0.last().unwrap().to_owned().try_into().unwrap()
 }
