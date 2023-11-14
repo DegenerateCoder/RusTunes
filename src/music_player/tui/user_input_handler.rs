@@ -99,68 +99,20 @@ impl TUIUserInputHandler {
 
     fn handle_key_event_command(&mut self, key: crossterm::event::KeyEvent) -> bool {
         let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
+        if key.code != crossterm::event::KeyCode::Tab
+            && key.code != crossterm::event::KeyCode::BackTab
+        {
+            self.command_suggestions_index = None;
+            self.command_suggestions = None;
+        }
         match key.code {
             crossterm::event::KeyCode::Tab => {
-                if self.command_suggestions.is_none() {
-                    let suggestions = self
-                        .commands
-                        .generate_suggestions(&self.command_text, &self.tui_state);
-                    if !suggestions.is_empty() {
-                        self.command_suggestions = Some(suggestions);
-                    }
-                }
-
-                if self.command_suggestions.is_some() {
-                    let suggestions = self.command_suggestions.as_ref().unwrap();
-                    let mut i = self.command_suggestions_index.map_or(0, |i| i + 1);
-                    if i == suggestions.len() {
-                        i = 0;
-                    }
-                    self.command_suggestions_index = Some(i);
-
-                    let suggestion = suggestions.get(i).unwrap().to_owned();
-                    self.command_text = suggestion.to_owned();
-
-                    tui_signal_send
-                        .send(TuiSignals::SetCommandText(suggestion))
-                        .unwrap();
-                }
+                self.tab_complete(false);
             }
             crossterm::event::KeyCode::BackTab => {
-                if self.command_suggestions.is_none() {
-                    let suggestions = self
-                        .commands
-                        .generate_suggestions(&self.command_text, &self.tui_state);
-                    if !suggestions.is_empty() {
-                        self.command_suggestions = Some(suggestions);
-                    }
-                }
-
-                if self.command_suggestions.is_some() {
-                    let suggestions = self.command_suggestions.as_ref().unwrap();
-                    let i = self
-                        .command_suggestions_index
-                        .map_or(suggestions.len() - 1, |i| {
-                            if i != 0 {
-                                i - 1
-                            } else {
-                                suggestions.len() - 1
-                            }
-                        });
-                    self.command_suggestions_index = Some(i);
-
-                    let suggestion = suggestions.get(i).unwrap().to_owned();
-                    self.command_text = suggestion.to_owned();
-
-                    tui_signal_send
-                        .send(TuiSignals::SetCommandText(suggestion))
-                        .unwrap();
-                }
+                self.tab_complete(true);
             }
             crossterm::event::KeyCode::Enter => {
-                self.command_suggestions_index = None;
-                self.command_suggestions = None;
-
                 self.enter_command_mode = false;
                 tui_signal_send
                     .send(TuiSignals::EnterCommandMode(false))
@@ -176,29 +128,66 @@ impl TUIUserInputHandler {
                 }
             }
             crossterm::event::KeyCode::Char(c) => {
-                self.command_suggestions_index = None;
-                self.command_suggestions = None;
-
                 self.command_text.push(c);
                 tui_signal_send
                     .send(TuiSignals::UpdateCommandText(c))
                     .unwrap();
             }
             crossterm::event::KeyCode::Backspace => {
-                self.command_suggestions_index = None;
-                self.command_suggestions = None;
-
                 self.command_text.pop();
                 tui_signal_send
                     .send(TuiSignals::UpdateCommandTextBackspace)
                     .unwrap();
             }
-            _ => {
-                self.command_suggestions_index = None;
-                self.command_suggestions = None;
-            }
+            _ => (),
         }
         false
+    }
+
+    fn tab_complete(&mut self, back_tab: bool) {
+        let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
+
+        if self.command_suggestions.is_none() {
+            let suggestions = self
+                .commands
+                .generate_suggestions(&self.command_text, &self.tui_state);
+            if !suggestions.is_empty() {
+                self.command_suggestions = Some(suggestions);
+            }
+        }
+
+        if self.command_suggestions.is_some() {
+            let suggestions = self.command_suggestions.as_ref().unwrap();
+            let i = {
+                if !back_tab {
+                    self.command_suggestions_index.map_or(0, |i| {
+                        if i < suggestions.len() - 1 {
+                            i + 1
+                        } else {
+                            0
+                        }
+                    })
+                } else {
+                    self.command_suggestions_index
+                        .map_or(suggestions.len() - 1, |i| {
+                            if i != 0 {
+                                i - 1
+                            } else {
+                                suggestions.len() - 1
+                            }
+                        })
+                }
+            };
+
+            self.command_suggestions_index = Some(i);
+
+            let suggestion = suggestions.get(i).unwrap().to_owned();
+            self.command_text = suggestion.to_owned();
+
+            tui_signal_send
+                .send(TuiSignals::SetCommandText(suggestion))
+                .unwrap();
+        }
     }
 
     fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) -> bool {
