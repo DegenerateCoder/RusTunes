@@ -70,6 +70,45 @@ impl TuiCommands {
             .and_then(|state_commands| state_commands.map_command_str_to_action(command_with_args?))
     }
 
+    pub fn generate_suggestions(&self, command_text: &str, tui_state: &TuiState) -> Vec<String> {
+        let global_command_names = self.global_commands.get_commands_names();
+        let states_commands_names = self
+            .states_commands
+            .get(&tui_state)
+            .map(|state_comands| state_comands.get_commands_names());
+
+        let mut commands_suggestions = Vec::new();
+        for command_name in global_command_names {
+            if let Some(ins_dist) = Self::calculate_ins_distance(command_text, command_name) {
+                commands_suggestions.push((command_name, ins_dist));
+            }
+        }
+        if let Some(states_commands_names) = states_commands_names {
+            for command_name in states_commands_names {
+                if let Some(ins_dist) = Self::calculate_ins_distance(command_text, command_name) {
+                    commands_suggestions.push((command_name, ins_dist));
+                }
+            }
+        }
+
+        commands_suggestions.sort_by_key(|(_, inst_dist)| *inst_dist);
+
+        commands_suggestions
+            .iter()
+            .map(|(command_name, _)| (**command_name).to_owned())
+            .collect()
+    }
+
+    pub fn calculate_ins_distance(from: &str, to: &str) -> Option<u8> {
+        if !to.starts_with(from) {
+            return None;
+        }
+
+        let insertions = to.chars().skip(from.chars().count());
+
+        Some(insertions.count().try_into().unwrap())
+    }
+
     pub fn generate_help_str(&self) -> String {
         let mut help_str = String::new();
 

@@ -14,6 +14,8 @@ pub struct TUIUserInputHandler {
     tui_state: TuiState,
     enter_command_mode: bool,
     command_text: String,
+    command_suggestions: Option<Vec<String>>,
+    command_suggestions_index: Option<usize>,
     volume: i64,
     commands: TuiCommands,
     tui_input_handler_signal_recv: Option<crossbeam::channel::Receiver<TuiInputHandlerSignals>>,
@@ -36,6 +38,8 @@ impl TUIUserInputHandler {
             tui_signal_send: None,
             mp_logic_signal_send: None,
             send_help_str: true,
+            command_suggestions: None,
+            command_suggestions_index: None,
         }
     }
 
@@ -96,7 +100,67 @@ impl TUIUserInputHandler {
     fn handle_key_event_command(&mut self, key: crossterm::event::KeyEvent) -> bool {
         let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
         match key.code {
+            crossterm::event::KeyCode::Tab => {
+                if self.command_suggestions.is_none() {
+                    let suggestions = self
+                        .commands
+                        .generate_suggestions(&self.command_text, &self.tui_state);
+                    if !suggestions.is_empty() {
+                        self.command_suggestions = Some(suggestions);
+                    }
+                }
+
+                if self.command_suggestions.is_some() {
+                    let suggestions = self.command_suggestions.as_ref().unwrap();
+                    let mut i = self.command_suggestions_index.map_or(0, |i| i + 1);
+                    if i == suggestions.len() {
+                        i = 0;
+                    }
+                    self.command_suggestions_index = Some(i);
+
+                    let suggestion = suggestions.get(i).unwrap().to_owned();
+                    self.command_text = suggestion.to_owned();
+
+                    tui_signal_send
+                        .send(TuiSignals::SetCommandText(suggestion))
+                        .unwrap();
+                }
+            }
+            crossterm::event::KeyCode::BackTab => {
+                if self.command_suggestions.is_none() {
+                    let suggestions = self
+                        .commands
+                        .generate_suggestions(&self.command_text, &self.tui_state);
+                    if !suggestions.is_empty() {
+                        self.command_suggestions = Some(suggestions);
+                    }
+                }
+
+                if self.command_suggestions.is_some() {
+                    let suggestions = self.command_suggestions.as_ref().unwrap();
+                    let i = self
+                        .command_suggestions_index
+                        .map_or(suggestions.len() - 1, |i| {
+                            if i != 0 {
+                                i - 1
+                            } else {
+                                suggestions.len() - 1
+                            }
+                        });
+                    self.command_suggestions_index = Some(i);
+
+                    let suggestion = suggestions.get(i).unwrap().to_owned();
+                    self.command_text = suggestion.to_owned();
+
+                    tui_signal_send
+                        .send(TuiSignals::SetCommandText(suggestion))
+                        .unwrap();
+                }
+            }
             crossterm::event::KeyCode::Enter => {
+                self.command_suggestions_index = None;
+                self.command_suggestions = None;
+
                 self.enter_command_mode = false;
                 tui_signal_send
                     .send(TuiSignals::EnterCommandMode(false))
@@ -112,18 +176,27 @@ impl TUIUserInputHandler {
                 }
             }
             crossterm::event::KeyCode::Char(c) => {
+                self.command_suggestions_index = None;
+                self.command_suggestions = None;
+
                 self.command_text.push(c);
                 tui_signal_send
                     .send(TuiSignals::UpdateCommandText(c))
                     .unwrap();
             }
             crossterm::event::KeyCode::Backspace => {
+                self.command_suggestions_index = None;
+                self.command_suggestions = None;
+
                 self.command_text.pop();
                 tui_signal_send
                     .send(TuiSignals::UpdateCommandTextBackspace)
                     .unwrap();
             }
-            _ => (),
+            _ => {
+                self.command_suggestions_index = None;
+                self.command_suggestions = None;
+            }
         }
         false
     }

@@ -188,6 +188,13 @@ impl CommandsRegistry {
 
         help_str.join("\n")
     }
+
+    pub fn get_commands_names(&self) -> Vec<&String> {
+        self.commands
+            .keys()
+            .filter(|key| self.commands.get(*key).unwrap().user_facing)
+            .collect()
+    }
 }
 
 #[derive(Debug)]

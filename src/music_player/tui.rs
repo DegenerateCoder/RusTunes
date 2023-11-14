@@ -16,6 +16,7 @@ use ratatui::{
 pub enum TuiSignals {
     EnterCommandMode(bool),
     UpdateCommandText(char),
+    SetCommandText(String),
     UpdateCommandTextBackspace,
     Start,
     AudioReady,
@@ -102,7 +103,7 @@ impl MusicPlayerTUI {
                 f.render_widget(block, size);
                 f.render_widget(text, inner);
                 if let Some(command) = command {
-                    let text = ratatui::widgets::Paragraph::new(command);
+                    let text = ratatui::widgets::Paragraph::new(":".to_owned() + command);
                     let mut inner = inner;
                     inner.y = inner.height;
                     inner.height = 1;
@@ -130,8 +131,9 @@ impl MusicPlayerTUI {
                 if let Ok(signal) = recv.try_recv() {
                     log::info!("MusicPlayerTUI::handle_signals -> {:?}", signal);
                     match signal {
-                        TuiSignals::EnterCommandMode(true) => command_text = Some(":".to_string()),
+                        TuiSignals::EnterCommandMode(true) => command_text = Some("".to_string()),
                         TuiSignals::EnterCommandMode(false) => command_text = None,
+                        TuiSignals::SetCommandText(str) => command_text = Some(str),
                         TuiSignals::UpdateCommandText(c) => {
                             let mut str = command_text.take().unwrap();
                             str.push(c);
