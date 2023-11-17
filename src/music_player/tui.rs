@@ -62,7 +62,9 @@ impl MusicPlayerTUI {
         let mut stdout = std::io::stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
         let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend).unwrap();
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal.clear().unwrap();
 
         MusicPlayerTUI {
             terminal,

@@ -2,6 +2,7 @@ use crate::music_player::logger::Error;
 use crate::music_player::tui::commands::commands_registry::Arg;
 pub mod options_registry;
 use crate::music_player::music_player_core::music_source::Source;
+use crate::utils;
 use options_registry::{Action, OptionDefinition, OptionType, OptionsRegistry};
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -297,10 +298,7 @@ impl MusicPlayerOptions {
             for piped_api_domain in piped_api_domains {
                 scope.spawn(|_| {
                     let piped_api_domain = piped_api_domain.clone();
-                    let reqwest_client = reqwest::blocking::Client::builder()
-                        .timeout(std::time::Duration::from_secs(5))
-                        .build()
-                        .unwrap();
+                    let reqwest_client = utils::get_reqwest_client().unwrap();
 
                     let request_url = format!("{}/streams/{}", piped_api_domain, "dQw4w9WgXcQ");
                     let request = reqwest_client.get(request_url).build().unwrap();
@@ -357,13 +355,10 @@ impl MusicPlayerOptions {
             for invidious_api_domain in invidious_api_domains {
                 scope.spawn(|_| {
                     let invidious_api_domain = invidious_api_domain.clone();
-                    let reqwest_client = reqwest::blocking::Client::builder()
-                        .timeout(std::time::Duration::from_secs(5))
-                        .build()
-                        .unwrap();
-
+                    let reqwest_client = utils::get_reqwest_client().unwrap();
                     let request_url =
                         format!("{}/api/v1/videos/{}", invidious_api_domain, "dQw4w9WgXcQ");
+
                     let request = reqwest_client.get(request_url).build().unwrap();
 
                     let start = std::time::SystemTime::now();
@@ -419,12 +414,7 @@ impl MusicPlayerOptions {
         let mut piped_api_domains = Vec::new();
 
         let request_url = "https://piped-instances.kavin.rocks/";
-        let reqwest_client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .unwrap();
-        let request = reqwest_client.get(request_url).build()?;
-        let response: serde_json::Value = reqwest_client.execute(request)?.json()?;
+        let response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
 
         let instances = response
             .as_array()
@@ -455,12 +445,7 @@ impl MusicPlayerOptions {
         let mut invidious_api_domains = Vec::new();
 
         let request_url = "https://api.invidious.io/instances.json?pretty=0&sort_by=type,health";
-        let reqwest_client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .unwrap();
-        let request = reqwest_client.get(request_url).build()?;
-        let response: serde_json::Value = reqwest_client.execute(request)?.json()?;
+        let response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
 
         let instances = response
             .as_array()

@@ -1,4 +1,5 @@
 use crate::music_player::logger::Error;
+use crate::utils;
 
 pub struct RemoteSourceProcessor {
     piped_api_domains: Vec<String>,
@@ -8,7 +9,6 @@ pub struct RemoteSourceProcessor {
     duration_limit: u64,
     piped_api_domain_index_start: usize,
     invidious_api_domain_index_start: usize,
-    reqwest_client: reqwest::blocking::Client,
 }
 
 #[derive(Debug, Clone)]
@@ -103,10 +103,6 @@ impl RemoteSourceProcessor {
         invidious_api_domain_index: usize,
         duration_limit: u64,
     ) -> Result<Self, Error> {
-        let reqwest_client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()?;
-
         Ok(Self {
             piped_api_domains,
             piped_api_domain_index,
@@ -115,7 +111,6 @@ impl RemoteSourceProcessor {
             duration_limit,
             piped_api_domain_index_start: piped_api_domain_index,
             invidious_api_domain_index_start: invidious_api_domain_index,
-            reqwest_client,
         })
     }
 
@@ -164,8 +159,7 @@ impl RemoteSourceProcessor {
             &source.video_id
         );
 
-        let request = self.reqwest_client.get(request_url).build()?;
-        let mut response: serde_json::Value = self.reqwest_client.execute(request)?.json()?;
+        let mut response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
 
         let _test_audio_streams = response
             .get("audioStreams")
@@ -213,8 +207,7 @@ impl RemoteSourceProcessor {
             &source.video_id
         );
 
-        let request = self.reqwest_client.get(request_url).build()?;
-        let response: serde_json::Value = self.reqwest_client.execute(request)?.json()?;
+        let response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
 
         let genre = response
             .get("genre")
@@ -267,8 +260,7 @@ impl RemoteSourceProcessor {
     ) -> Result<Source, Error> {
         let request_url = format!("{}/streams/{}", self.get_piped_api_domain(), video_id);
 
-        let request = self.reqwest_client.get(request_url).build()?;
-        let response: serde_json::Value = self.reqwest_client.execute(request)?.json()?;
+        let response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
 
         let related_streams = response
             .get("relatedStreams")
@@ -344,8 +336,7 @@ impl RemoteSourceProcessor {
         let mut playlist = Vec::new();
         let request_url = format!("{}/playlists/{}", self.get_piped_api_domain(), playlist_id);
 
-        let request = self.reqwest_client.get(request_url).build()?;
-        let mut response: serde_json::Value = self.reqwest_client.execute(request)?.json()?;
+        let mut response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
 
         loop {
             let related_streams = response
@@ -379,7 +370,7 @@ impl RemoteSourceProcessor {
                 urlencoding::encode(&nextpage)
             );
 
-            response = reqwest::blocking::get(&request_url)?.json()?;
+            response = utils::reqwest_get(&request_url)?.json()?;
         }
 
         self.piped_api_domain_index_start = self.piped_api_domain_index;
@@ -402,8 +393,7 @@ impl RemoteSourceProcessor {
     pub fn _fetch_piped_api_domains(&mut self) -> Result<(), Error> {
         let request_url = "https://piped-instances.kavin.rocks/";
 
-        let request = self.reqwest_client.get(request_url).build()?;
-        let response: serde_json::Value = self.reqwest_client.execute(request)?.json()?;
+        let response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
 
         let instances = response
             .as_array()
@@ -446,8 +436,7 @@ impl RemoteSourceProcessor {
     pub fn _fetch_invidious_api_domains(&mut self) -> Result<(), Error> {
         let request_url = "https://api.invidious.io/instances.json?pretty=0&sort_by=type,health";
 
-        let request = self.reqwest_client.get(request_url).build()?;
-        let response: serde_json::Value = self.reqwest_client.execute(request)?.json()?;
+        let response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
 
         let instances = response
             .as_array()
