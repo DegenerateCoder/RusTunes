@@ -23,10 +23,7 @@ pub struct MusicPlayer {
 }
 
 impl MusicPlayer {
-    pub fn new(
-        config: music_player_config::MusicPlayerConfig,
-        log_send: logger::LogSender,
-    ) -> Self {
+    pub fn new(config: music_player_config::MusicPlayerConfig) -> Self {
         let mut libmpv =
             libmpv_handlers::LibMpvHandler::initialize_libmpv(config.mpv_base_volume).unwrap();
         let libmpv_signal_send = libmpv.create_signal_channel();
@@ -48,7 +45,6 @@ impl MusicPlayer {
         let libmpv_event_handler = libmpv_handlers::EventHandler::new(
             mp_logic_signal_send.clone(),
             tui_signal_send.clone(),
-            log_send,
         );
 
         music_player_logic.set_signal_senders(

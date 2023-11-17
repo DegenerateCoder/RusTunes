@@ -1,4 +1,3 @@
-use crate::music_player::logger::LogSender;
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 use crate::music_player::tui::TuiSignals;
 
@@ -99,19 +98,16 @@ impl LibMpvHandler {
 pub struct EventHandler {
     mp_logic_signal_send: crossbeam::channel::Sender<MusicPlayerLogicSignals>,
     tui_signal_send: crossbeam::channel::Sender<TuiSignals>,
-    log_send: LogSender,
 }
 
 impl EventHandler {
     pub fn new(
         mp_logic_signal_send: crossbeam::channel::Sender<MusicPlayerLogicSignals>,
         tui_signal_send: crossbeam::channel::Sender<TuiSignals>,
-        log_send: LogSender,
     ) -> Self {
         Self {
             mp_logic_signal_send,
             tui_signal_send,
-            log_send,
         }
     }
 
@@ -185,7 +181,6 @@ impl EventHandler {
                     .unwrap();
             }
             libmpv::events::Event::Shutdown => {
-                self.log_send.send_quit_signal();
                 return true;
             }
             _e => (),

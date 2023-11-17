@@ -60,12 +60,12 @@ fn main() {
                 })?;
 
                 if let Some(user_input) = user_input {
-                    let mut music_player = MusicPlayer::new(config, log_send);
+                    let mut music_player = MusicPlayer::new(config);
                     music_player.play(&user_input);
                 } else {
                     log_send.send_quit_signal();
                 }
-                Ok(())
+                Ok(log_send.send_quit_signal())
             });
             if debug_log {
                 scope.spawn(|_| logger.log());
