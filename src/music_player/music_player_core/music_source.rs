@@ -1,4 +1,4 @@
-use crate::music_player::logger::Error;
+use crate::music_player::Error;
 use crate::utils;
 
 pub struct RemoteSourceProcessor {

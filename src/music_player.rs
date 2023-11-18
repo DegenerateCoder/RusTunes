@@ -1,3 +1,4 @@
+pub mod error;
 mod libmpv_handlers;
 pub mod logger;
 pub mod music_player_config;
@@ -12,6 +13,8 @@ mod music_player_core;
 )]
 mod music_player_os_interface;
 mod tui;
+
+use error::Error;
 
 pub struct MusicPlayer {
     libmpv: libmpv_handlers::LibMpvHandler,
@@ -76,7 +79,7 @@ impl MusicPlayer {
         let ev_ctx = self.libmpv.create_event_context();
         let ev_ctx = ev_ctx.unwrap();
 
-        let mut error: Result<(), logger::Error> = Ok(());
+        let mut error: Result<(), Error> = Ok(());
         crossbeam::scope(|scope| {
             scope.spawn(|_| self.libmpv.handle_signals());
             scope.spawn(|_| self.tui.handle_signals());

@@ -1,10 +1,10 @@
 pub mod music_source;
 
 use crate::music_player::libmpv_handlers::LibMpvSignals;
-use crate::music_player::logger::Error;
 use crate::music_player::music_player_config::MusicPlayerConfig;
 use crate::music_player::music_player_os_interface::OSInterfaceSignals;
 use crate::music_player::tui::{user_input_handler::TuiInputHandlerSignals, TuiSignals};
+use crate::music_player::Error;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::VecDeque;

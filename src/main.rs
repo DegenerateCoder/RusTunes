@@ -1,3 +1,4 @@
+use rustunes::music_player::error::Error;
 use rustunes::music_player::logger;
 use rustunes::music_player::music_player_config::options_registry::Action;
 use rustunes::music_player::{
@@ -21,10 +22,10 @@ fn main() {
     let options = music_player_options
         .preprocess_args(args)
         .map_err(|err| match err {
-            logger::Error::InvalidOption(msg) => println!("{msg}\n"),
+            Error::InvalidOption(msg) => println!("{msg}\n"),
             _ => println!("{:?}", err),
         })
-        .or::<Result<Vec<Action>, logger::Error>>(Ok(vec![Action::PrintHelp]))
+        .or::<Result<Vec<Action>, Error>>(Ok(vec![Action::PrintHelp]))
         .unwrap();
 
     let overwrite_config = options.contains(&Action::OverwriteConfig);
@@ -44,7 +45,7 @@ fn main() {
         let debug_log = config.debug_log;
 
         crossbeam::scope(|scope| {
-            scope.spawn(|_| -> Result<(), logger::Error> {
+            scope.spawn(|_| -> Result<(), Error> {
                 config.apply_complex_actions(options).map_err(|err| {
                     println!("{:?}", err);
                     log::error!("{:?}", err);

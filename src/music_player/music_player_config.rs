@@ -1,5 +1,5 @@
-use crate::music_player::logger::Error;
 use crate::music_player::tui::commands::commands_registry::Arg;
+use crate::music_player::Error;
 pub mod options_registry;
 use crate::music_player::music_player_core::music_source::Source;
 use crate::utils;
