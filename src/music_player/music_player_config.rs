@@ -298,15 +298,12 @@ impl MusicPlayerOptions {
             for piped_api_domain in piped_api_domains {
                 scope.spawn(|_| {
                     let piped_api_domain = piped_api_domain.clone();
-                    let reqwest_client = utils::get_reqwest_client().unwrap();
-
                     let request_url = format!("{}/streams/{}", piped_api_domain, "dQw4w9WgXcQ");
-                    let request = reqwest_client.get(request_url).build().unwrap();
 
-                    let start = std::time::SystemTime::now();
-                    let response = reqwest_client.execute(request);
-                    if response.is_ok() {
-                        let elapsed = start.elapsed().unwrap().as_millis();
+                    let elapsed = utils::measure_reqwest_get_duration(&request_url);
+
+                    if elapsed.is_ok() {
+                        let elapsed = elapsed.unwrap().as_millis();
 
                         println!("\t{piped_api_domain}: {elapsed}ms");
                         log::info!("\t{piped_api_domain}: {elapsed}ms");
@@ -314,7 +311,7 @@ impl MusicPlayerOptions {
                         ranking_queue.push((piped_api_domain, elapsed)).unwrap();
                     } else {
                         println!("\t{piped_api_domain}: ERROR");
-                        log::info!("\t{piped_api_domain}: {:?}", response.err());
+                        log::info!("\t{piped_api_domain}: {:?}", elapsed.err());
                     }
                 });
             }
@@ -355,16 +352,13 @@ impl MusicPlayerOptions {
             for invidious_api_domain in invidious_api_domains {
                 scope.spawn(|_| {
                     let invidious_api_domain = invidious_api_domain.clone();
-                    let reqwest_client = utils::get_reqwest_client().unwrap();
                     let request_url =
                         format!("{}/api/v1/videos/{}", invidious_api_domain, "dQw4w9WgXcQ");
 
-                    let request = reqwest_client.get(request_url).build().unwrap();
+                    let elapsed = utils::measure_reqwest_get_duration(&request_url);
 
-                    let start = std::time::SystemTime::now();
-                    let response = reqwest_client.execute(request);
-                    if response.is_ok() {
-                        let elapsed = start.elapsed().unwrap().as_millis();
+                    if elapsed.is_ok() {
+                        let elapsed = elapsed.unwrap().as_millis();
 
                         println!("\t{invidious_api_domain}: {elapsed}ms");
                         log::info!("\t{invidious_api_domain}: {elapsed}ms");
@@ -372,7 +366,7 @@ impl MusicPlayerOptions {
                         ranking_queue.push((invidious_api_domain, elapsed)).unwrap();
                     } else {
                         println!("\t{invidious_api_domain}: ERROR");
-                        log::info!("\t{invidious_api_domain}: {:?}", response.err());
+                        log::info!("\t{invidious_api_domain}: {:?}", elapsed.err());
                     }
                 });
             }
