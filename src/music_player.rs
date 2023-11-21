@@ -75,11 +75,15 @@ impl MusicPlayer {
         }
     }
 
-    pub fn play(&mut self, user_input: &str) {
+    pub fn play(&mut self, user_input: &str) -> Result<(), Error> {
         let ev_ctx = self.libmpv.create_event_context();
         let ev_ctx = ev_ctx.unwrap();
 
-        let mut error: Result<(), Error> = Ok(());
+        let mut error: Result<(), Error> = self.music_player_logic.validate_user_input(user_input);
+        if error.is_err() {
+            self.tui.restore_terminal();
+            return error;
+        }
         crossbeam::scope(|scope| {
             scope.spawn(|_| self.libmpv.handle_signals());
             scope.spawn(|_| self.tui.handle_signals());
@@ -89,6 +93,9 @@ impl MusicPlayer {
                 if error.is_ok() {
                     error = self.music_player_logic.handle_playback_logic();
                 }
+                if error.is_err() {
+                    self.music_player_logic.send_quit_signals();
+                }
             });
             scope.spawn(|_| self.tui_input_handler.handle_user_input());
             scope.spawn(|_| self.music_player_os_interface.handle_signals());
@@ -97,6 +104,6 @@ impl MusicPlayer {
 
         self.tui.restore_terminal();
 
-        error.unwrap();
+        error
     }
 }

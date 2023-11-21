@@ -46,27 +46,10 @@ fn main() {
 
         crossbeam::scope(|scope| {
             scope.spawn(|_| -> Result<(), Error> {
-                config.apply_complex_actions(options).map_err(|err| {
-                    println!("{:?}", err);
-                    log::error!("{:?}", err);
-                    log_send.send_quit_signal();
-                    err
-                })?;
+                let result = music_player(config, options, overwrite_config, user_input);
+                log_send.send_quit_signal();
 
-                config.overwrite_config(overwrite_config).map_err(|err| {
-                    println!("{:?}", err);
-                    log::error!("{:?}", err);
-                    log_send.send_quit_signal();
-                    err
-                })?;
-
-                if let Some(user_input) = user_input {
-                    let mut music_player = MusicPlayer::new(config);
-                    music_player.play(&user_input);
-                } else {
-                    log_send.send_quit_signal();
-                }
-                Ok(log_send.send_quit_signal())
+                result
             });
             if debug_log {
                 scope.spawn(|_| logger.log());
@@ -77,4 +60,34 @@ fn main() {
             logger.flush().unwrap();
         }
     }
+}
+
+fn music_player(
+    mut config: MusicPlayerConfig,
+    options: Vec<Action>,
+    overwrite_config: bool,
+    user_input: Option<String>,
+) -> Result<(), Error> {
+    config.apply_complex_actions(options).map_err(|err| {
+        println!("{:?}", err);
+        log::error!("{:?}", err);
+        err
+    })?;
+
+    config.overwrite_config(overwrite_config).map_err(|err| {
+        println!("{:?}", err);
+        log::error!("{:?}", err);
+        err
+    })?;
+
+    if let Some(user_input) = user_input {
+        let mut music_player = MusicPlayer::new(config);
+
+        music_player.play(&user_input).map_err(|err| {
+            println!("{:?}", err);
+            log::error!("{:?}", err);
+            err
+        })?;
+    }
+    Ok(())
 }

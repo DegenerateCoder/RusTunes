@@ -14,5 +14,5 @@ pub fn reqwest_get(url: &str) -> reqwest::Result<reqwest::blocking::Response> {
     let request = reqwest_client.get(url).build()?;
     let response = reqwest_client.execute(request)?;
 
-    Ok(response)
+    Ok(response.error_for_status()?)
 }

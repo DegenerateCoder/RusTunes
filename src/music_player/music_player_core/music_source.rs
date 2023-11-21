@@ -125,11 +125,11 @@ impl RemoteSourceProcessor {
                 "All piped api domains are unrechable".to_string(),
             ))
         } else {
+            self.piped_api_domain_index = i;
             log::info!(
                 "RemoteSourceProcessor::next_piped_api_domains_index -> {:?}",
                 self.get_piped_api_domain()
             );
-            self.piped_api_domain_index = i;
             Ok(())
         }
     }
@@ -488,12 +488,70 @@ impl RemoteSourceProcessor {
                 "All invidious api domains are unrechable".to_string(),
             ))
         } else {
+            self.invidious_api_domain_index = i;
             log::info!(
                 "RemoteSourceProcessor::next_invidious_api_domains_index -> {:?}",
                 self.get_invidious_api_domain()
             );
-            self.invidious_api_domain_index = i;
             Ok(())
         }
+    }
+
+    pub fn is_valid_video_url(&mut self, url: &str) -> Result<bool, Error> {
+        log::info!("RemoteSourceProcessor::is_valid_video_url -> {}", url);
+        let result = self._is_valid_video_url(url);
+        log::info!("RemoteSourceProcessor::is_valid_video_url -> {:?}", result);
+
+        Ok(result?)
+    }
+
+    pub fn _is_valid_video_url(&self, url: &str) -> Result<bool, Error> {
+        let video_id = Remote::url_into_video_id(url)?;
+        let request_url = format!("{}/streams/{}", self.get_piped_api_domain(), video_id);
+        let response = utils::reqwest_get(&request_url);
+
+        if Self::invalid_data_status(&response) {
+            Ok(false)
+        } else {
+            Ok(response?.status() == reqwest::StatusCode::OK)
+        }
+    }
+
+    pub fn is_valid_playlist_url(&mut self, url: &str) -> Result<bool, Error> {
+        log::info!("RemoteSourceProcessor::is_valid_playlist_url -> {}", url);
+        let result = self._is_valid_playlist_url(url);
+        log::info!(
+            "RemoteSourceProcessor::is_valid_playlist_url -> {:?}",
+            result
+        );
+
+        Ok(result?)
+    }
+
+    pub fn _is_valid_playlist_url(&self, url: &str) -> Result<bool, Error> {
+        let playlist_id = Remote::url_into_playlist_id(url)?;
+        let request_url = format!("{}/playlists/{}", self.get_piped_api_domain(), playlist_id);
+        let response = utils::reqwest_get(&request_url);
+
+        if Self::invalid_data_status(&response) {
+            Ok(false)
+        } else {
+            Ok(response?.status() == reqwest::StatusCode::OK)
+        }
+    }
+
+    fn invalid_data_status(response: &reqwest::Result<reqwest::blocking::Response>) -> bool {
+        let mut invalid = false;
+        if response.is_err() {
+            let response_err = response.as_ref().unwrap_err();
+            let response_status = response_err.status();
+            match response_status {
+                Some(reqwest::StatusCode::BAD_REQUEST) => invalid = true,
+                Some(reqwest::StatusCode::INTERNAL_SERVER_ERROR) => invalid = true,
+                _ => (),
+            }
+        }
+
+        invalid
     }
 }

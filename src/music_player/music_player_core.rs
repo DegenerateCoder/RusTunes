@@ -86,6 +86,33 @@ impl MusicPlayerLogic {
         self.signals_senders.tui_input_handler = Some(tui_input_handler_send);
     }
 
+    pub fn validate_user_input(&mut self, user_input: &str) -> Result<(), Error> {
+        if user_input.contains("list=") {
+            let mut is_valid = self.remote_src_proc.is_valid_playlist_url(user_input);
+            while is_valid.is_err() {
+                self.handle_piped_api_domain_update()?;
+                is_valid = self.remote_src_proc.is_valid_playlist_url(user_input);
+            }
+            if !is_valid? {
+                return Err(Error::InvalidPlaylistUrl(format!(
+                    "The provided playlist URL is invalid: {user_input}"
+                )));
+            }
+        } else {
+            let mut is_valid = self.remote_src_proc.is_valid_video_url(user_input);
+            while is_valid.is_err() {
+                self.handle_piped_api_domain_update()?;
+                is_valid = self.remote_src_proc.is_valid_video_url(user_input);
+            }
+            if !is_valid? {
+                return Err(Error::InvalidVideoUrl(format!(
+                    "The provided video URL is invalid: {user_input}"
+                )));
+            }
+        }
+        Ok(())
+    }
+
     pub fn process_user_input(&mut self, user_input: &str) -> Result<(), Error> {
         if user_input.contains("list=") {
             self.playlist_to_play = music_source::Remote::url_into_playlist_id(user_input).unwrap();
@@ -425,6 +452,23 @@ impl MusicPlayerLogic {
         }
 
         Ok(result?)
+    }
+
+    pub fn send_quit_signals(&self) {
+        let signals_senders = &self.signals_senders;
+        let libmpv_signal_send = signals_senders.libmpv.as_ref().unwrap();
+        let os_interface_signal_send = signals_senders.os_interface.as_ref().unwrap();
+        let tui_signal_send = signals_senders.tui.as_ref().unwrap();
+        let tui_input_handler_send = signals_senders.tui_input_handler.as_ref().unwrap();
+
+        libmpv_signal_send.send(LibMpvSignals::End).unwrap();
+        tui_signal_send.send(TuiSignals::Quit).unwrap();
+        tui_input_handler_send
+            .send(TuiInputHandlerSignals::Quit)
+            .unwrap();
+        os_interface_signal_send
+            .send(OSInterfaceSignals::End)
+            .unwrap();
     }
 
     fn handle_piped_api_domain_update(&mut self) -> Result<(), Error> {
