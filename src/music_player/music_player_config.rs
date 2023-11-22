@@ -3,7 +3,7 @@ use crate::music_player::Error;
 pub mod options_registry;
 use crate::music_player::music_player_core::music_source::Source;
 use crate::utils;
-use options_registry::{Action, OptionDefinition, OptionType, OptionsRegistry};
+use options_registry::{OptionAction, OptionDefinition, OptionType, OptionsRegistry};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct MusicPlayerConfig {
@@ -55,30 +55,38 @@ impl MusicPlayerConfig {
         "#
     }
 
-    pub fn apply_simple_actions(&mut self, actions: Vec<Action>) -> Vec<Action> {
+    pub fn apply_simple_actions(&mut self, actions: Vec<OptionAction>) -> Vec<OptionAction> {
         let config = self;
         let mut complex_actions = Vec::new();
 
         for action in actions {
             match action {
-                Action::SetPipedApiDomainIndex(index) => config.piped_api_domain_index = index,
-                Action::SetShufflePlaylist(val) => config.shuffle_playlist = val,
-                Action::SetInvidiousApiDomainIndex(index) => {
+                OptionAction::SetPipedApiDomainIndex(index) => {
+                    config.piped_api_domain_index = index
+                }
+                OptionAction::SetShufflePlaylist(val) => config.shuffle_playlist = val,
+                OptionAction::SetInvidiousApiDomainIndex(index) => {
                     config.invidious_api_domain_index = index
                 }
-                Action::SetMpvBaseVolume(val) => config.mpv_base_volume = val,
-                Action::SetVideoDurationLimit(val) => config.video_duration_limit_s = val,
-                Action::SetDebugLog(val) => config.debug_log = val,
-                Action::SetPlayOnlyRecommendations(val) => config.play_only_recommendations = val,
-                Action::PrintHelp => (),
-                Action::OverwriteConfig => (),
-                Action::RankPipedApiDomains => complex_actions.push(Action::RankPipedApiDomains),
-                Action::RankInvidiousApiDomains => {
-                    complex_actions.push(Action::RankInvidiousApiDomains)
+                OptionAction::SetMpvBaseVolume(val) => config.mpv_base_volume = val,
+                OptionAction::SetVideoDurationLimit(val) => config.video_duration_limit_s = val,
+                OptionAction::SetDebugLog(val) => config.debug_log = val,
+                OptionAction::SetPlayOnlyRecommendations(val) => {
+                    config.play_only_recommendations = val
                 }
-                Action::FetchPipedApiDomains => complex_actions.push(Action::FetchPipedApiDomains),
-                Action::FetchInvidiousApiDomains => {
-                    complex_actions.push(Action::FetchInvidiousApiDomains)
+                OptionAction::PrintHelp => (),
+                OptionAction::OverwriteConfig => (),
+                OptionAction::RankPipedApiDomains => {
+                    complex_actions.push(OptionAction::RankPipedApiDomains)
+                }
+                OptionAction::RankInvidiousApiDomains => {
+                    complex_actions.push(OptionAction::RankInvidiousApiDomains)
+                }
+                OptionAction::FetchPipedApiDomains => {
+                    complex_actions.push(OptionAction::FetchPipedApiDomains)
+                }
+                OptionAction::FetchInvidiousApiDomains => {
+                    complex_actions.push(OptionAction::FetchInvidiousApiDomains)
                 }
             }
         }
@@ -90,7 +98,7 @@ impl MusicPlayerConfig {
         complex_actions
     }
 
-    pub fn apply_complex_actions(&mut self, actions: Vec<Action>) -> Result<(), Error> {
+    pub fn apply_complex_actions(&mut self, actions: Vec<OptionAction>) -> Result<(), Error> {
         let config = self;
         let mut rank_piped_api_domains = false;
         let mut rank_invidious_api_domains = false;
@@ -99,10 +107,10 @@ impl MusicPlayerConfig {
 
         for action in actions {
             match action {
-                Action::RankPipedApiDomains => rank_piped_api_domains = true,
-                Action::RankInvidiousApiDomains => rank_invidious_api_domains = true,
-                Action::FetchPipedApiDomains => fetch_piped_api_domains = true,
-                Action::FetchInvidiousApiDomains => fetch_invidious_api_domains = true,
+                OptionAction::RankPipedApiDomains => rank_piped_api_domains = true,
+                OptionAction::RankInvidiousApiDomains => rank_invidious_api_domains = true,
+                OptionAction::FetchPipedApiDomains => fetch_piped_api_domains = true,
+                OptionAction::FetchInvidiousApiDomains => fetch_invidious_api_domains = true,
                 _ => (),
             }
         }
@@ -236,7 +244,7 @@ impl MusicPlayerOptions {
         (args, user_input)
     }
 
-    pub fn preprocess_args(&self, args: &[String]) -> Result<Vec<Action>, Error> {
+    pub fn preprocess_args(&self, args: &[String]) -> Result<Vec<OptionAction>, Error> {
         let mut actions = Vec::new();
 
         for arg in args {

@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+action_to_type_macro = { path = "src/action_to_type_macro" }
 chrono = "0.4.31"
 crossbeam = "0.8.2"
 crossterm = "0.27.0"

@@ -1,6 +1,6 @@
 use crate::music_player::libmpv_handlers::LibMpvSignals;
 use crate::music_player::music_player_core::MusicPlayerLogicSignals;
-use crate::music_player::tui::commands::{commands_registry::Action, TuiCommands};
+use crate::music_player::tui::commands::{commands_registry::CommandAction, TuiCommands};
 use crate::music_player::tui::TuiSignals;
 use crate::music_player::tui::TuiState;
 use crossterm::event;
@@ -201,14 +201,14 @@ impl TUIUserInputHandler {
         false
     }
 
-    fn handle_action(&mut self, action: Action) -> bool {
+    fn handle_action(&mut self, action: CommandAction) -> bool {
         let libmpv_signal_send = self.libmpv_signal_send.as_ref().unwrap();
         let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
         let mp_logic_signal_send = self.mp_logic_signal_send.as_ref().unwrap();
 
         log::info!("TUIUserInputHandler::handle_key_event -> {:?}", action);
         match action {
-            Action::Quit => {
+            CommandAction::Quit => {
                 mp_logic_signal_send
                     .send(MusicPlayerLogicSignals::End)
                     .unwrap();
@@ -217,7 +217,7 @@ impl TUIUserInputHandler {
 
                 return true;
             }
-            Action::View(tui_state) => {
+            CommandAction::View(tui_state) => {
                 if (tui_state == TuiState::Help) && self.send_help_str {
                     self.send_help_str = false;
                     let help_str = self.commands.generate_help_str();
@@ -230,10 +230,10 @@ impl TUIUserInputHandler {
                     .unwrap();
                 self.tui_state = tui_state;
             }
-            Action::PlayerPauseResume => {
+            CommandAction::PlayerPauseResume => {
                 libmpv_signal_send.send(LibMpvSignals::PauseResume).unwrap();
             }
-            Action::Vol(vol) => {
+            CommandAction::Vol(vol) => {
                 self.volume = Self::get_updated_volume(self.volume, vol);
                 tui_signal_send
                     .send(TuiSignals::UpdateVolume(self.volume))
@@ -243,19 +243,19 @@ impl TUIUserInputHandler {
                     .send(LibMpvSignals::SetVolume(self.volume))
                     .unwrap();
             }
-            Action::PlayerNext => {
+            CommandAction::PlayerNext => {
                 libmpv_signal_send.send(LibMpvSignals::PlayNext).unwrap();
             }
-            Action::PlayerPrev => {
+            CommandAction::PlayerPrev => {
                 mp_logic_signal_send
                     .send(MusicPlayerLogicSignals::PlayPrev)
                     .unwrap();
                 libmpv_signal_send.send(LibMpvSignals::PlayPrev).unwrap();
             }
-            Action::Scroll(y) => {
+            CommandAction::Scroll(y) => {
                 tui_signal_send.send(TuiSignals::ModifyScroll(y)).unwrap();
             }
-            Action::EnterCommandMode => {
+            CommandAction::EnterCommandMode => {
                 self.command_text = "".to_string();
                 self.enter_command_mode = true;
                 tui_signal_send

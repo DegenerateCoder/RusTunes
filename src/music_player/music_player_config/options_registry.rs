@@ -1,5 +1,6 @@
 use crate::music_player::tui::commands::commands_registry::Arg;
 use crate::music_player::tui::TuiState;
+use action_to_type_macro::ActionToType;
 use std::collections::HashMap;
 
 pub struct OptionDefinition {
@@ -40,7 +41,7 @@ impl OptionsRegistry {
         }
     }
 
-    pub fn map_option_to_action(&self, option: &str, args: Vec<&str>) -> Option<Action> {
+    pub fn map_option_to_action(&self, option: &str, args: Vec<&str>) -> Option<OptionAction> {
         let option = self.options.get(option)?;
 
         let action = &option.action;
@@ -68,37 +69,39 @@ impl OptionsRegistry {
         }
 
         let action_with_args = match action {
-            OptionType::PrintHelp => Action::PrintHelp,
+            OptionType::PrintHelp => OptionAction::PrintHelp,
             OptionType::SetPipedApiDomainIndex => {
-                Action::SetPipedApiDomainIndex(processed_args.pop()?.extract_usize()?)
+                OptionAction::SetPipedApiDomainIndex(processed_args.pop()?.extract_usize()?)
             }
             OptionType::SetInvidiousApiDomainIndex => {
-                Action::SetInvidiousApiDomainIndex(processed_args.pop()?.extract_usize()?)
+                OptionAction::SetInvidiousApiDomainIndex(processed_args.pop()?.extract_usize()?)
             }
             OptionType::SetShufflePlaylist => {
-                Action::SetShufflePlaylist(processed_args.pop()?.extract_bool()?)
+                OptionAction::SetShufflePlaylist(processed_args.pop()?.extract_bool()?)
             }
             OptionType::SetMpvBaseVolume => {
-                Action::SetMpvBaseVolume(processed_args.pop()?.extract_i64()?)
+                OptionAction::SetMpvBaseVolume(processed_args.pop()?.extract_i64()?)
             }
             OptionType::SetPlayOnlyRecommendations => {
-                Action::SetPlayOnlyRecommendations(processed_args.pop()?.extract_bool()?)
+                OptionAction::SetPlayOnlyRecommendations(processed_args.pop()?.extract_bool()?)
             }
             OptionType::SetVideoDurationLimit => {
-                Action::SetVideoDurationLimit(processed_args.pop()?.extract_u64()?)
+                OptionAction::SetVideoDurationLimit(processed_args.pop()?.extract_u64()?)
             }
-            OptionType::SetDebugLog => Action::SetDebugLog(processed_args.pop()?.extract_bool()?),
-            OptionType::RankPipedApiDomains => Action::RankPipedApiDomains,
-            OptionType::RankInvidiousApiDomains => Action::RankInvidiousApiDomains,
-            OptionType::FetchPipedApiDomains => Action::FetchPipedApiDomains,
-            OptionType::FetchInvidiousApiDomains => Action::FetchInvidiousApiDomains,
-            OptionType::OverwriteConfig => Action::OverwriteConfig,
+            OptionType::SetDebugLog => {
+                OptionAction::SetDebugLog(processed_args.pop()?.extract_bool()?)
+            }
+            OptionType::RankPipedApiDomains => OptionAction::RankPipedApiDomains,
+            OptionType::RankInvidiousApiDomains => OptionAction::RankInvidiousApiDomains,
+            OptionType::FetchPipedApiDomains => OptionAction::FetchPipedApiDomains,
+            OptionType::FetchInvidiousApiDomains => OptionAction::FetchInvidiousApiDomains,
+            OptionType::OverwriteConfig => OptionAction::OverwriteConfig,
         };
 
         Some(action_with_args)
     }
 
-    pub fn map_option_str_to_action(&self, option: &str) -> Option<Action> {
+    pub fn map_option_str_to_action(&self, option: &str) -> Option<OptionAction> {
         let mut option_with_args = option.split('=');
 
         let option = option_with_args.next()?;
@@ -143,25 +146,8 @@ impl OptionsRegistry {
     }
 }
 
-#[derive(Debug)]
-pub enum OptionType {
-    PrintHelp,
-    SetPipedApiDomainIndex,
-    SetInvidiousApiDomainIndex,
-    SetShufflePlaylist,
-    SetMpvBaseVolume,
-    SetDebugLog,
-    SetPlayOnlyRecommendations,
-    SetVideoDurationLimit,
-    RankPipedApiDomains,
-    RankInvidiousApiDomains,
-    FetchPipedApiDomains,
-    FetchInvidiousApiDomains,
-    OverwriteConfig,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Action {
+#[derive(Debug, PartialEq, Eq, ActionToType)]
+pub enum OptionAction {
     PrintHelp,
     SetPipedApiDomainIndex(usize),
     SetInvidiousApiDomainIndex(usize),

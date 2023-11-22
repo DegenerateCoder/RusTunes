@@ -1,4 +1,5 @@
 use crate::music_player::tui::TuiState;
+use action_to_type_macro::ActionToType;
 use std::collections::hash_map::HashMap;
 
 pub struct CommandDefinition {
@@ -106,7 +107,7 @@ impl CommandsRegistry {
         }
     }
 
-    pub fn map_command_to_action(&self, command: &str, args: Vec<&str>) -> Option<Action> {
+    pub fn map_command_to_action(&self, command: &str, args: Vec<&str>) -> Option<CommandAction> {
         let command = self.commands.get(command)?;
 
         let action = &command.action;
@@ -135,20 +136,20 @@ impl CommandsRegistry {
         }
 
         let action_with_args = match action {
-            CommandType::EnterCommandMode => Action::EnterCommandMode,
-            CommandType::View => Action::View(processed_args.pop()?.extract_tui_state()?),
-            CommandType::Quit => Action::Quit,
-            CommandType::PlayerPauseResume => Action::PlayerPauseResume,
-            CommandType::PlayerNext => Action::PlayerNext,
-            CommandType::PlayerPrev => Action::PlayerPrev,
-            CommandType::Vol => Action::Vol(processed_args.pop()?.extract_i64()?),
-            CommandType::Scroll => Action::Scroll(processed_args.pop()?.extract_i16()?),
+            CommandType::EnterCommandMode => CommandAction::EnterCommandMode,
+            CommandType::View => CommandAction::View(processed_args.pop()?.extract_tui_state()?),
+            CommandType::Quit => CommandAction::Quit,
+            CommandType::PlayerPauseResume => CommandAction::PlayerPauseResume,
+            CommandType::PlayerNext => CommandAction::PlayerNext,
+            CommandType::PlayerPrev => CommandAction::PlayerPrev,
+            CommandType::Vol => CommandAction::Vol(processed_args.pop()?.extract_i64()?),
+            CommandType::Scroll => CommandAction::Scroll(processed_args.pop()?.extract_i16()?),
         };
 
         Some(action_with_args)
     }
 
-    pub fn map_command_str_to_action(&self, command: &str) -> Option<Action> {
+    pub fn map_command_str_to_action(&self, command: &str) -> Option<CommandAction> {
         let mut command_with_args = command.split(' ');
 
         let command = command_with_args.next()?;
@@ -197,20 +198,8 @@ impl CommandsRegistry {
     }
 }
 
-#[derive(Debug)]
-pub enum CommandType {
-    EnterCommandMode,
-    View,
-    Quit,
-    PlayerPauseResume,
-    PlayerNext,
-    PlayerPrev,
-    Vol,
-    Scroll,
-}
-
-#[derive(Debug)]
-pub enum Action {
+#[derive(Debug, ActionToType)]
+pub enum CommandAction {
     EnterCommandMode,
     View(TuiState),
     Quit,

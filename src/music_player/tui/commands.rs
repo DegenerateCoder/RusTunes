@@ -1,5 +1,5 @@
 use crate::music_player::tui::TuiState;
-use commands_registry::{Action, Arg, CommandDefinition, CommandType, CommandsRegistry};
+use commands_registry::{Arg, CommandAction, CommandDefinition, CommandType, CommandsRegistry};
 use crossterm::event::KeyCode;
 use std::collections::hash_map::HashMap;
 use std::fmt::Write;
@@ -37,7 +37,7 @@ impl TuiCommands {
         &self,
         command_text: &str,
         tui_state: &TuiState,
-    ) -> Option<Action> {
+    ) -> Option<CommandAction> {
         let mut action = self.global_commands.map_command_str_to_action(command_text);
 
         if action.is_none() {
@@ -50,7 +50,11 @@ impl TuiCommands {
         action
     }
 
-    pub fn map_keycode_to_action(&self, key: KeyCode, tui_state: &TuiState) -> Option<Action> {
+    pub fn map_keycode_to_action(
+        &self,
+        key: KeyCode,
+        tui_state: &TuiState,
+    ) -> Option<CommandAction> {
         let mut global_command = true;
         let command_with_args = self.global_commands_keys.get(&key).or_else(|| {
             global_command = false;

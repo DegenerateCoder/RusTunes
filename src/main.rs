@@ -1,6 +1,6 @@
 use rustunes::music_player::error::Error;
 use rustunes::music_player::logger;
-use rustunes::music_player::music_player_config::options_registry::Action;
+use rustunes::music_player::music_player_config::options_registry::OptionAction;
 use rustunes::music_player::{
     music_player_config::{MusicPlayerConfig, MusicPlayerOptions},
     MusicPlayer,
@@ -25,12 +25,12 @@ fn main() {
             Error::InvalidOption(msg) => println!("{msg}\n"),
             _ => println!("{:?}", err),
         })
-        .or::<Result<Vec<Action>, Error>>(Ok(vec![Action::PrintHelp]))
+        .or::<Result<Vec<OptionAction>, Error>>(Ok(vec![OptionAction::PrintHelp]))
         .unwrap();
 
-    let overwrite_config = options.contains(&Action::OverwriteConfig);
+    let overwrite_config = options.contains(&OptionAction::OverwriteConfig);
 
-    if options.contains(&Action::PrintHelp) || (user_input.is_none() && !overwrite_config) {
+    if options.contains(&OptionAction::PrintHelp) || (user_input.is_none() && !overwrite_config) {
         MusicPlayerOptions::new().print_help();
         return;
     }
@@ -64,7 +64,7 @@ fn main() {
 
 fn music_player(
     mut config: MusicPlayerConfig,
-    options: Vec<Action>,
+    options: Vec<OptionAction>,
     overwrite_config: bool,
     user_input: Option<String>,
 ) -> Result<(), Error> {
