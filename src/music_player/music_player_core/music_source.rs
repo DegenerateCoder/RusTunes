@@ -378,8 +378,13 @@ impl RemoteSourceProcessor {
     }
 
     pub fn fetch_piped_api_domains(&mut self) -> Result<(), Error> {
-        let result = self._fetch_piped_api_domains();
+        log::info!("RemoteSourceProcessor::fetch_piped_api_domains");
 
+        self.piped_api_domains.clear();
+        self.piped_api_domain_index = 0;
+        self.piped_api_domain_index_start = 0;
+
+        let result = utils::fetch_piped_api_domains();
         if result.is_err() {
             log::info!(
                 "RemoteSourceProcessor::fetch_piped_api_domains -> {:?}",
@@ -387,30 +392,7 @@ impl RemoteSourceProcessor {
             );
         }
 
-        Ok(result?)
-    }
-
-    pub fn _fetch_piped_api_domains(&mut self) -> Result<(), Error> {
-        let request_url = "https://piped-instances.kavin.rocks/";
-
-        let response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
-
-        let instances = response
-            .as_array()
-            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
-
-        self.piped_api_domains.clear();
-
-        for instance in instances {
-            let api_url = instance
-                .get("api_url")
-                .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
-            let api_url = api_url.as_str().unwrap();
-
-            self.piped_api_domains.push(api_url.to_string());
-            self.piped_api_domain_index = 0;
-            self.piped_api_domain_index_start = 0;
-        }
+        self.piped_api_domains = result?;
 
         log::info!(
             "RemoteSourceProcessor::fetch_piped_api_domains -> {:?}",
@@ -421,8 +403,13 @@ impl RemoteSourceProcessor {
     }
 
     pub fn fetch_invidious_api_domains(&mut self) -> Result<(), Error> {
-        let result = self._fetch_invidious_api_domains();
+        log::info!("RemoteSourceProcessor::fetch_invidious_api_domains");
 
+        self.invidious_api_domains.clear();
+        self.invidious_api_domain_index = 0;
+        self.invidious_api_domain_index_start = 0;
+
+        let result = utils::fetch_invidious_api_domains();
         if result.is_err() {
             log::info!(
                 "RemoteSourceProcessor::fetch_invidious_api_domains -> {:?}",
@@ -430,44 +417,7 @@ impl RemoteSourceProcessor {
             );
         }
 
-        Ok(result?)
-    }
-
-    pub fn _fetch_invidious_api_domains(&mut self) -> Result<(), Error> {
-        let request_url = "https://api.invidious.io/instances.json?pretty=0&sort_by=type,health";
-
-        let response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
-
-        let instances = response
-            .as_array()
-            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
-
-        self.invidious_api_domains.clear();
-
-        for instance in instances {
-            let instance_data = instance
-                .get(1)
-                .ok_or_else(|| Error::OtherError(format!("{:?}", instance.to_string())))?;
-            let api = instance_data
-                .get("api")
-                .ok_or_else(|| Error::OtherError(format!("{:?}", instance.to_string())))?
-                .as_bool();
-            if let Some(api) = api {
-                if !api {
-                    continue;
-                }
-            } else {
-                continue;
-            }
-            let api_url = instance_data
-                .get("uri")
-                .ok_or_else(|| Error::OtherError(format!("{:?}", instance.to_string())))?;
-            let api_url = api_url.as_str().unwrap();
-
-            self.invidious_api_domains.push(api_url.to_string());
-            self.invidious_api_domain_index = 0;
-            self.invidious_api_domain_index_start = 0;
-        }
+        self.invidious_api_domains = result?;
 
         log::info!(
             "RemoteSourceProcessor::fetch_invidious_api_domains -> {:?}",
