@@ -10,7 +10,7 @@ pub struct CommandDefinition {
 }
 
 pub enum Arg {
-    TuiState(Option<TuiState>),
+    TUISTATE(Option<TuiState>),
     USIZE(Option<usize>),
     BOOL(Option<bool>),
     I64(Option<i64>),
@@ -19,9 +19,9 @@ pub enum Arg {
 }
 
 impl Arg {
-    pub fn extract_tui_state(self) -> Option<TuiState> {
+    pub fn extract_tuistate(self) -> Option<TuiState> {
         match self {
-            Arg::TuiState(tui_state) => tui_state,
+            Arg::TUISTATE(tui_state) => tui_state,
             _ => None,
         }
     }
@@ -63,7 +63,7 @@ impl Arg {
 
     pub fn to_type_str(&self) -> &'static str {
         match self {
-            Arg::TuiState(_) => "TuiState",
+            Arg::TUISTATE(_) => "TuiState",
             Arg::USIZE(_) => "usize",
             Arg::BOOL(_) => "bool",
             Arg::I16(_) => "i16",
@@ -120,7 +120,7 @@ impl CommandsRegistry {
         let mut processed_args = vec![];
         for (i, arg) in args.iter().enumerate() {
             let processed_arg = match action_args[i] {
-                Arg::TuiState(_) => Arg::TuiState(match *arg {
+                Arg::TUISTATE(_) => Arg::TUISTATE(match *arg {
                     "player" => Some(TuiState::Player),
                     "history" => Some(TuiState::History),
                     "help" => Some(TuiState::Help),
@@ -135,16 +135,7 @@ impl CommandsRegistry {
             processed_args.push(processed_arg);
         }
 
-        let action_with_args = match action {
-            CommandType::EnterCommandMode => CommandAction::EnterCommandMode,
-            CommandType::View => CommandAction::View(processed_args.pop()?.extract_tui_state()?),
-            CommandType::Quit => CommandAction::Quit,
-            CommandType::PlayerPauseResume => CommandAction::PlayerPauseResume,
-            CommandType::PlayerNext => CommandAction::PlayerNext,
-            CommandType::PlayerPrev => CommandAction::PlayerPrev,
-            CommandType::Vol => CommandAction::Vol(processed_args.pop()?.extract_i64()?),
-            CommandType::Scroll => CommandAction::Scroll(processed_args.pop()?.extract_i16()?),
-        };
+        let action_with_args = action.map_type_to_action(processed_args)?;
 
         Some(action_with_args)
     }

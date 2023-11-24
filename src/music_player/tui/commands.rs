@@ -172,7 +172,7 @@ impl TuiCommands {
             CommandDefinition {
                 name: "view".to_string(),
                 action_type: CommandType::View,
-                args: vec![Arg::TuiState(None)],
+                args: vec![Arg::TUISTATE(None)],
                 user_facing: true,
             },
             CommandDefinition {

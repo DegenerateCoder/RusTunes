@@ -54,7 +54,7 @@ impl OptionsRegistry {
         let mut processed_args = vec![];
         for (i, arg) in args.iter().enumerate() {
             let processed_arg = match action_args[i] {
-                Arg::TuiState(_) => Arg::TuiState(match *arg {
+                Arg::TUISTATE(_) => Arg::TUISTATE(match *arg {
                     "player" => Some(TuiState::Player),
                     "history" => Some(TuiState::History),
                     _ => None,
@@ -68,35 +68,7 @@ impl OptionsRegistry {
             processed_args.push(processed_arg);
         }
 
-        let action_with_args = match action {
-            OptionType::PrintHelp => OptionAction::PrintHelp,
-            OptionType::SetPipedApiDomainIndex => {
-                OptionAction::SetPipedApiDomainIndex(processed_args.pop()?.extract_usize()?)
-            }
-            OptionType::SetInvidiousApiDomainIndex => {
-                OptionAction::SetInvidiousApiDomainIndex(processed_args.pop()?.extract_usize()?)
-            }
-            OptionType::SetShufflePlaylist => {
-                OptionAction::SetShufflePlaylist(processed_args.pop()?.extract_bool()?)
-            }
-            OptionType::SetMpvBaseVolume => {
-                OptionAction::SetMpvBaseVolume(processed_args.pop()?.extract_i64()?)
-            }
-            OptionType::SetPlayOnlyRecommendations => {
-                OptionAction::SetPlayOnlyRecommendations(processed_args.pop()?.extract_bool()?)
-            }
-            OptionType::SetVideoDurationLimit => {
-                OptionAction::SetVideoDurationLimit(processed_args.pop()?.extract_u64()?)
-            }
-            OptionType::SetDebugLog => {
-                OptionAction::SetDebugLog(processed_args.pop()?.extract_bool()?)
-            }
-            OptionType::RankPipedApiDomains => OptionAction::RankPipedApiDomains,
-            OptionType::RankInvidiousApiDomains => OptionAction::RankInvidiousApiDomains,
-            OptionType::FetchPipedApiDomains => OptionAction::FetchPipedApiDomains,
-            OptionType::FetchInvidiousApiDomains => OptionAction::FetchInvidiousApiDomains,
-            OptionType::OverwriteConfig => OptionAction::OverwriteConfig,
-        };
+        let action_with_args = action.map_type_to_action(processed_args)?;
 
         Some(action_with_args)
     }
