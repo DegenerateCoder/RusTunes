@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 action_to_type_macro = { path = "src/action_to_type_macro" }
 chrono = "0.4.31"
+cli-clipboard = "0.4.0"
 crossbeam = "0.8.2"
 crossterm = "0.27.0"
 libmpv-sirno = "2.0.2-fork.1"

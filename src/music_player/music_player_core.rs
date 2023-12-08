@@ -16,6 +16,7 @@ pub enum MusicPlayerLogicSignals {
     PlayPrev,
     End,
     BrokenUrl,
+    RequestCurrentVideoURL,
 }
 
 struct SignalSendersCollection {
@@ -202,6 +203,21 @@ impl MusicPlayerLogic {
                         MusicPlayerLogicSignals::BrokenUrl => {
                             self.handle_piped_api_domain_update()?;
                             self.broken_url()?;
+                        }
+                        MusicPlayerLogicSignals::RequestCurrentVideoURL => {
+                            let music_source =
+                                self.to_play.get_mut(self.to_play_index - 1).unwrap();
+                            let remote_src = music_source.get_remote_source_mut()?;
+
+                            self.signals_senders
+                                .tui_input_handler
+                                .as_ref()
+                                .unwrap()
+                                .send(TuiInputHandlerSignals::ClipboardCopyVideoUrl(format!(
+                                    "https://www.youtube.com/watch?v={}",
+                                    remote_src.video_id
+                                )))
+                                .unwrap();
                         }
                     }
                 }

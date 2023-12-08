@@ -3,11 +3,13 @@ use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 use crate::music_player::tui::commands::{commands_registry::CommandAction, TuiCommands};
 use crate::music_player::tui::TuiSignals;
 use crate::music_player::tui::TuiState;
+use cli_clipboard::{ClipboardContext, ClipboardProvider};
 use crossterm::event;
 
 #[derive(Debug)]
 pub enum TuiInputHandlerSignals {
     Quit,
+    ClipboardCopyVideoUrl(String),
 }
 
 pub struct TUIUserInputHandler {
@@ -23,6 +25,7 @@ pub struct TUIUserInputHandler {
     tui_signal_send: Option<crossbeam::channel::Sender<TuiSignals>>,
     mp_logic_signal_send: Option<crossbeam::channel::Sender<MusicPlayerLogicSignals>>,
     send_help_str: bool,
+    clipboard_ctx: ClipboardContext,
 }
 
 impl TUIUserInputHandler {
@@ -40,6 +43,7 @@ impl TUIUserInputHandler {
             send_help_str: true,
             command_suggestions: None,
             command_suggestions_index: None,
+            clipboard_ctx: ClipboardContext::new().unwrap(),
         }
     }
 
@@ -89,6 +93,13 @@ impl TUIUserInputHandler {
                         match signal {
                             TuiInputHandlerSignals::Quit => {
                                 break;
+                            }
+                            TuiInputHandlerSignals::ClipboardCopyVideoUrl(video_url) => {
+                                let res = self.clipboard_ctx.set_contents(video_url.to_owned());
+                                log::info!(
+                                    "TUIUserInputHandler::handle_user_input::ClipboardCopyVideoUrl -> {:?}",
+                                   res 
+                                );
                             }
                         }
                     }
@@ -260,6 +271,11 @@ impl TUIUserInputHandler {
                 self.enter_command_mode = true;
                 tui_signal_send
                     .send(TuiSignals::EnterCommandMode(true))
+                    .unwrap();
+            }
+            CommandAction::CopyVideoURL => {
+                mp_logic_signal_send
+                    .send(MusicPlayerLogicSignals::RequestCurrentVideoURL)
                     .unwrap();
             }
         }

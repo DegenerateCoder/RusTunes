@@ -205,6 +205,12 @@ impl TuiCommands {
                 args: vec![],
                 user_facing: true,
             },
+            CommandDefinition {
+                name: "copy".to_string(),
+                action_type: CommandType::CopyVideoURL,
+                args: vec![],
+                user_facing: true,
+            },
         ]);
 
         global_commands

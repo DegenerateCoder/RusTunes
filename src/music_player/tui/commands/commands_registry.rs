@@ -199,4 +199,5 @@ pub enum CommandAction {
     PlayerPrev,
     Vol(i64),
     Scroll(i16),
+    CopyVideoURL,
 }
