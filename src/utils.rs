@@ -37,6 +37,14 @@ pub fn measure_reqwest_get_duration(url: &str) -> reqwest::Result<std::time::Dur
 }
 
 pub fn fetch_piped_api_domains() -> Result<Vec<String>, Error> {
+    if let Ok(piped_api_domains) = fetch_piped_api_domains_instances() {
+        Ok(piped_api_domains)
+    } else {
+        fetch_piped_api_domains_uptime()
+    }
+}
+
+pub fn fetch_piped_api_domains_instances() -> Result<Vec<String>, Error> {
     let mut piped_api_domains = Vec::new();
 
     let request_url = "https://piped-instances.kavin.rocks/";
@@ -52,6 +60,34 @@ pub fn fetch_piped_api_domains() -> Result<Vec<String>, Error> {
         let api_url = api_url.as_str().unwrap();
 
         piped_api_domains.push(api_url.to_string());
+    }
+
+    Ok(piped_api_domains)
+}
+
+pub fn fetch_piped_api_domains_uptime() -> Result<Vec<String>, Error> {
+    let mut piped_api_domains = Vec::new();
+
+    let request_url =
+        "https://raw.githubusercontent.com/TeamPiped/piped-uptime/master/history/summary.json";
+    let response: serde_json::Value = reqwest_get(&request_url)?.json()?;
+
+    let instances = response
+        .as_array()
+        .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+    for instance in instances {
+        let status = instance
+            .get("status")
+            .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+
+        if status == "up" {
+            let api_url = instance
+                .get("url")
+                .ok_or_else(|| Error::OtherError(format!("{:?}", response.to_string())))?;
+            let api_url = api_url.as_str().unwrap();
+
+            piped_api_domains.push(api_url.replace("/healthcheck", ""));
+        }
     }
 
     Ok(piped_api_domains)
