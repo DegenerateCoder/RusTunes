@@ -490,14 +490,22 @@ impl RemoteSourceProcessor {
         }
     }
 
-    fn invalid_data_status(response: &reqwest::Result<reqwest::blocking::Response>) -> bool {
+    fn invalid_data_status(response: &Result<reqwest::blocking::Response, Error>) -> bool {
         let mut invalid = false;
         if response.is_err() {
             let response_err = response.as_ref().unwrap_err();
-            let response_status = response_err.status();
-            match response_status {
-                Some(reqwest::StatusCode::BAD_REQUEST) => invalid = true,
-                Some(reqwest::StatusCode::INTERNAL_SERVER_ERROR) => invalid = true,
+            match response_err {
+                Error::ReqwestError(response_err) => {
+                    let response_status = response_err.status();
+                    match response_status {
+                        Some(reqwest::StatusCode::BAD_REQUEST) => invalid = true,
+                        Some(reqwest::StatusCode::INTERNAL_SERVER_ERROR) => invalid = true,
+                        _ => (),
+                    }
+                }
+                Error::VideoBlockedInAllRegions => {
+                    invalid = true;
+                }
                 _ => (),
             }
         }

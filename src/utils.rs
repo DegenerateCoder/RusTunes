@@ -13,13 +13,27 @@ pub fn get_reqwest_client() -> reqwest::Result<reqwest::blocking::Client> {
 }
 
 #[inline(always)]
-pub fn reqwest_get(url: &str) -> reqwest::Result<reqwest::blocking::Response> {
+pub fn reqwest_get(url: &str) -> Result<reqwest::blocking::Response, Error> {
     let reqwest_client = get_reqwest_client()?;
 
     let request = reqwest_client.get(url).build()?;
-    let response = reqwest_client.execute(request)?;
+    let mut response = reqwest_client.execute(request)?;
 
-    Ok(response.error_for_status()?)
+    if response.status() != reqwest::StatusCode::INTERNAL_SERVER_ERROR {
+        Ok(response.error_for_status()?)
+    } else {
+        let mut buf: Vec<u8> = Vec::new();
+        response.copy_to(&mut buf)?;
+        if let Ok(response_str) = String::from_utf8(buf) {
+            if response_str.contains("Federated bypass failed, video not available in any region") {
+                return Err(Error::VideoBlockedInAllRegions);
+            }
+        }
+
+        Err(Error::ReqwestError(
+            response.error_for_status().unwrap_err(),
+        ))
+    }
 }
 
 #[inline(always)]

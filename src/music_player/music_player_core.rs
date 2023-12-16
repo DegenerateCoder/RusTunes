@@ -336,11 +336,18 @@ impl MusicPlayerLogic {
         }
 
         if next_to_play.audio_stream_url.is_empty() {
-            Self::prepare_source(
+            let result = Self::prepare_source(
                 next_to_play_src,
                 &mut self.remote_src_proc,
                 &self.signals_senders,
-            )?;
+            );
+            match result.as_ref() {
+                Err(Error::VideoBlockedInAllRegions) => {
+                    self.to_play_index += 1;
+                    return self.prepare_next_to_play();
+                }
+                _ => result?,
+            }
             let next_to_play = next_to_play_src.get_remote_source_mut().unwrap();
             let libmpv_signal_send = self.signals_senders.libmpv.as_ref().unwrap();
             libmpv_signal_send
@@ -354,7 +361,7 @@ impl MusicPlayerLogic {
     }
 
     fn find_related_source(&mut self) -> Result<music_source::Source, Error> {
-        let related_video_id = self.related_queue.pop_front().unwrap();
+        let mut related_video_id = self.related_queue.pop_front().unwrap();
         self.related_queue.push_back(related_video_id.clone());
 
         log::info!(
@@ -368,6 +375,13 @@ impl MusicPlayerLogic {
 
         while related_source.is_err() {
             match related_source.unwrap_err() {
+                Error::VideoBlockedInAllRegions => {
+                    let poped = self.related_queue.pop_back();
+                    log::info!("MusicPlayerLogic::find_related_source::Error::VideoBlockedInAllRegions -> {:?}", poped);
+
+                    related_video_id = self.related_queue.pop_front().unwrap();
+                    self.related_queue.push_back(related_video_id.clone());
+                }
                 Error::AllInvidiousApiDomainsDown(_) => Self::invidious_api_domains_error(
                     &mut self.remote_src_proc,
                     &self.signals_senders,
@@ -397,9 +411,14 @@ impl MusicPlayerLogic {
 
         let error = Self::prepare_source_impl(music_src, remote_src_proc);
 
-        if let Err(_err) = error {
-            Self::piped_api_domains_error(remote_src_proc, signals_senders)?;
-            Self::prepare_source_impl(music_src, remote_src_proc)?;
+        if let Err(err) = error {
+            match err {
+                Error::VideoBlockedInAllRegions => return Err(Error::VideoBlockedInAllRegions),
+                _ => {
+                    Self::piped_api_domains_error(remote_src_proc, signals_senders)?;
+                    Self::prepare_source_impl(music_src, remote_src_proc)?;
+                }
+            }
         }
 
         Ok(())
@@ -411,8 +430,15 @@ impl MusicPlayerLogic {
     ) -> Result<(), Error> {
         let music_src = music_src.get_remote_source_mut()?;
 
-        while remote_src_proc.set_audio_url_title(music_src).is_err() {
-            remote_src_proc.next_piped_api_domains_index()?;
+        let mut result = remote_src_proc.set_audio_url_title(music_src);
+        while result.is_err() {
+            match result.unwrap_err() {
+                Error::VideoBlockedInAllRegions => return Err(Error::VideoBlockedInAllRegions),
+                _ => {
+                    remote_src_proc.next_piped_api_domains_index()?;
+                    result = remote_src_proc.set_audio_url_title(music_src)
+                }
+            }
         }
 
         Ok(())
