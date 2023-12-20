@@ -28,6 +28,9 @@ pub fn reqwest_get(url: &str) -> Result<reqwest::blocking::Response, Error> {
             if response_str.contains("Federated bypass failed, video not available in any region") {
                 return Err(Error::VideoBlockedInAllRegions);
             }
+            if response_str.contains("blocked it on copyright grounds") {
+                return Err(Error::VideoBlockedOnCopyRightGrounds);
+            }
         }
 
         Err(Error::ReqwestError(

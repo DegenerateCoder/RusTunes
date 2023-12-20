@@ -506,6 +506,10 @@ impl RemoteSourceProcessor {
                 Error::VideoBlockedInAllRegions => {
                     invalid = true;
                 }
+
+                Error::VideoBlockedOnCopyRightGrounds => {
+                    invalid = true;
+                }
                 _ => (),
             }
         }

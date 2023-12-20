@@ -4,6 +4,7 @@ pub enum Error {
     InvalidPlaylistUrl(String),
     ReqwestError(reqwest::Error),
     VideoBlockedInAllRegions,
+    VideoBlockedOnCopyRightGrounds,
     NoRelatedVideoFound(String),
     AllPipedApiDomainsDown(String),
     AllInvidiousApiDomainsDown(String),

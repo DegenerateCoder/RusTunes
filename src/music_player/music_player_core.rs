@@ -342,8 +342,9 @@ impl MusicPlayerLogic {
                 &self.signals_senders,
             );
             match result.as_ref() {
-                Err(Error::VideoBlockedInAllRegions) => {
-                    self.to_play_index += 1;
+                Err(Error::VideoBlockedInAllRegions)
+                | Err(Error::VideoBlockedOnCopyRightGrounds) => {
+                    self.to_play.remove(self.to_play_index);
                     return self.prepare_next_to_play();
                 }
                 _ => result?,
@@ -375,9 +376,12 @@ impl MusicPlayerLogic {
 
         while related_source.is_err() {
             match related_source.unwrap_err() {
-                Error::VideoBlockedInAllRegions => {
+                Error::VideoBlockedInAllRegions | Error::VideoBlockedOnCopyRightGrounds => {
                     let poped = self.related_queue.pop_back();
-                    log::info!("MusicPlayerLogic::find_related_source::Error::VideoBlockedInAllRegions -> {:?}", poped);
+                    log::info!(
+                        "MusicPlayerLogic::find_related_source::Error::VideoBlocked -> {:?}",
+                        poped
+                    );
 
                     related_video_id = self.related_queue.pop_front().unwrap();
                     self.related_queue.push_back(related_video_id.clone());
@@ -414,6 +418,10 @@ impl MusicPlayerLogic {
         if let Err(err) = error {
             match err {
                 Error::VideoBlockedInAllRegions => return Err(Error::VideoBlockedInAllRegions),
+                Error::VideoBlockedOnCopyRightGrounds => {
+                    return Err(Error::VideoBlockedOnCopyRightGrounds)
+                }
+
                 _ => {
                     Self::piped_api_domains_error(remote_src_proc, signals_senders)?;
                     Self::prepare_source_impl(music_src, remote_src_proc)?;
@@ -434,6 +442,9 @@ impl MusicPlayerLogic {
         while result.is_err() {
             match result.unwrap_err() {
                 Error::VideoBlockedInAllRegions => return Err(Error::VideoBlockedInAllRegions),
+                Error::VideoBlockedOnCopyRightGrounds => {
+                    return Err(Error::VideoBlockedOnCopyRightGrounds)
+                }
                 _ => {
                     remote_src_proc.next_piped_api_domains_index()?;
                     result = remote_src_proc.set_audio_url_title(music_src)
