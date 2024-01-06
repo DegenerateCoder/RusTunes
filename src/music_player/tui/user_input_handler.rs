@@ -3,8 +3,10 @@ use crate::music_player::music_player_core::MusicPlayerLogicSignals;
 use crate::music_player::tui::commands::{commands_registry::CommandAction, TuiCommands};
 use crate::music_player::tui::TuiSignals;
 use crate::music_player::tui::TuiState;
-use cli_clipboard::{ClipboardContext, ClipboardProvider};
 use crossterm::event;
+
+#[cfg(not(target_os = "android"))]
+use cli_clipboard::{ClipboardContext, ClipboardProvider};
 
 #[derive(Debug)]
 pub enum TuiInputHandlerSignals {
@@ -25,6 +27,8 @@ pub struct TUIUserInputHandler {
     tui_signal_send: Option<crossbeam::channel::Sender<TuiSignals>>,
     mp_logic_signal_send: Option<crossbeam::channel::Sender<MusicPlayerLogicSignals>>,
     send_help_str: bool,
+
+    #[cfg(not(target_os = "android"))]
     clipboard_ctx: ClipboardContext,
 }
 
@@ -43,6 +47,8 @@ impl TUIUserInputHandler {
             send_help_str: true,
             command_suggestions: None,
             command_suggestions_index: None,
+
+            #[cfg(not(target_os = "android"))]
             clipboard_ctx: ClipboardContext::new().unwrap(),
         }
     }
@@ -95,11 +101,7 @@ impl TUIUserInputHandler {
                                 break;
                             }
                             TuiInputHandlerSignals::ClipboardCopyVideoUrl(video_url) => {
-                                let res = self.clipboard_ctx.set_contents(video_url.to_owned());
-                                log::info!(
-                                    "TUIUserInputHandler::handle_user_input::ClipboardCopyVideoUrl -> {:?}",
-                                   res 
-                                );
+                                self.copy_to_clipboard(video_url)
                             }
                         }
                     }
@@ -107,6 +109,18 @@ impl TUIUserInputHandler {
             }
         }
     }
+
+    #[cfg(not(target_os = "android"))]
+    fn copy_to_clipboard(&mut self, text: String) {
+        let res = self.clipboard_ctx.set_contents(text);
+        log::info!(
+            "TUIUserInputHandler::handle_user_input::ClipboardCopyVideoUrl -> {:?}",
+            res
+        );
+    }
+
+    #[cfg(target_os = "android")]
+    fn copy_to_clipboard(&mut self, _text: String) {}
 
     fn handle_key_event_command(&mut self, key: crossterm::event::KeyEvent) -> bool {
         let tui_signal_send = self.tui_signal_send.as_ref().unwrap();
