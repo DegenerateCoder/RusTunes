@@ -302,6 +302,9 @@ impl RemoteSourceProcessor {
                 let video_id = &remote_src.video_id;
                 if played_video_ids.contains(video_id) {
                     return Ok(false);
+                } else if video_id.contains("list=") {
+                    //MIX or playlist
+                    return Ok(false);
                 } else if stream_json // possiblty of MIX with no duration
                     .get("duration")
                     .ok_or_else(|| Error::OtherError(format!("{:?}", stream_json)))?

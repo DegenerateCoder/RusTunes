@@ -374,6 +374,8 @@ impl MusicPlayerLogic {
             .remote_src_proc
             .get_related_video_source(&related_video_id, &self.played_video_ids);
 
+        let mut invidious_api_domains_error = false;
+
         while related_source.is_err() {
             match related_source.unwrap_err() {
                 Error::VideoBlockedInAllRegions | Error::VideoBlockedOnCopyRightGrounds => {
@@ -386,10 +388,27 @@ impl MusicPlayerLogic {
                     related_video_id = self.related_queue.pop_front().unwrap();
                     self.related_queue.push_back(related_video_id.clone());
                 }
-                Error::AllInvidiousApiDomainsDown(_) => Self::invidious_api_domains_error(
-                    &mut self.remote_src_proc,
-                    &self.signals_senders,
-                )?,
+                Error::AllInvidiousApiDomainsDown(_) => {
+                    Self::invidious_api_domains_error(
+                        &mut self.remote_src_proc,
+                        &self.signals_senders,
+                    )?;
+                    invidious_api_domains_error = true;
+                }
+                Error::NoRelatedVideoFound(_) => {
+                    if !invidious_api_domains_error {
+                        self.handle_piped_api_domain_update()?
+                    } else {
+                        let poped = self.related_queue.pop_back();
+                        log::info!(
+                            "MusicPlayerLogic::find_related_source::Error::NoRelatedVideoFound -> {:?}",
+                            poped
+                        );
+
+                        related_video_id = self.related_queue.pop_front().unwrap();
+                        self.related_queue.push_back(related_video_id.clone());
+                    }
+                }
                 _ => self.handle_piped_api_domain_update()?,
             }
 
