@@ -375,6 +375,7 @@ impl MusicPlayerLogic {
             .get_related_video_source(&related_video_id, &self.played_video_ids);
 
         let mut invidious_api_domains_error = false;
+        let mut piped_api_domains_error = false;
 
         while related_source.is_err() {
             match related_source.unwrap_err() {
@@ -389,6 +390,9 @@ impl MusicPlayerLogic {
                     self.related_queue.push_back(related_video_id.clone());
                 }
                 Error::AllInvidiousApiDomainsDown(_) => {
+                    log::info!(
+                        "MusicPlayerLogic::find_related_source::Error::AllInvidiousApiDomainsDown"
+                    );
                     Self::invidious_api_domains_error(
                         &mut self.remote_src_proc,
                         &self.signals_senders,
@@ -396,8 +400,8 @@ impl MusicPlayerLogic {
                     invidious_api_domains_error = true;
                 }
                 Error::NoRelatedVideoFound(_) => {
-                    if !invidious_api_domains_error {
-                        self.handle_piped_api_domain_update()?
+                    if !invidious_api_domains_error && !piped_api_domains_error {
+                        piped_api_domains_error = self.handle_piped_api_domain_update()?;
                     } else {
                         let poped = self.related_queue.pop_back();
                         log::info!(
@@ -409,7 +413,7 @@ impl MusicPlayerLogic {
                         self.related_queue.push_back(related_video_id.clone());
                     }
                 }
-                _ => self.handle_piped_api_domain_update()?,
+                _ => piped_api_domains_error = self.handle_piped_api_domain_update()?,
             }
 
             related_source = self
@@ -543,13 +547,14 @@ impl MusicPlayerLogic {
             .unwrap();
     }
 
-    fn handle_piped_api_domain_update(&mut self) -> Result<(), Error> {
+    fn handle_piped_api_domain_update(&mut self) -> Result<bool, Error> {
         let next_index_result = self.remote_src_proc.next_piped_api_domains_index();
         if next_index_result.is_err() {
             Self::piped_api_domains_error(&mut self.remote_src_proc, &self.signals_senders)?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-
-        Ok(())
     }
 }
 

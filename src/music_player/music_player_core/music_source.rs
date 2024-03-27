@@ -260,7 +260,15 @@ impl RemoteSourceProcessor {
     ) -> Result<Source, Error> {
         let request_url = format!("{}/streams/{}", self.get_piped_api_domain(), video_id);
 
-        let response: serde_json::Value = utils::reqwest_get(&request_url)?.json()?;
+        let response: serde_json::Value = utils::reqwest_get(&request_url)
+            .map_err(|err| match err {
+                Error::ReqwestError(_) => Error::NoRelatedVideoFound(format!(
+                    "No related videos found for video_id: {}",
+                    video_id
+                )),
+                _ => err,
+            })?
+            .json()?;
 
         let related_streams = response
             .get("relatedStreams")
